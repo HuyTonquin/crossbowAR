@@ -63,7 +63,6 @@
       background: rgba(255, 0, 0, 0.25);
       z-index: 9999;
       pointer-events: none;
-      animation: none;
     }
     @keyframes hitFlashAnim {
       0% { opacity: 0.7; }
@@ -76,12 +75,12 @@
       background: rgba(20, 146, 220, 0.7);
       padding: 8px 14px;
       border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.13);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.13);
       display: block;
       z-index: 10;
     }
     #restartBtn {
-      position: absolute;
+      position: #e67e22;
       bottom: 30px;
       left: 50%;
       transform: translateX(-50%);
@@ -90,10 +89,10 @@
       padding: 0.5em 1.2em;
       border-radius: 0.5em;
       border: none;
-      background: #e67e22;
+      background: none;
       color: white;
       opacity: 0.85;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     }
     #aimBtn {
       position: absolute;
@@ -139,6 +138,17 @@
       height: 100vh;
       border: none;
     }
+    #debug {
+      position: absolute;
+      top: 100px;
+      left: 10px;
+      color: yellow;
+      font-family: Arial, sans-serif;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      border-radius: 5px;
+      z-index: 10;
+    }
   </style>
 </head>
 <body>
@@ -162,65 +172,123 @@
     <iframe id="gameIframe" src=""></iframe>
   </div>
   <div id="hitFlash"></div>
+  <div id="debug"></div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/fflate@0.7.4/umd/index.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/EXRLoader.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/three.js/build/ar-threex.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/artoolkitx/jsartoolkit5@master/build/artoolkit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/artoolkitx/jsartoolkit5@master/js/artoolkit.three.js"></script>
   <script>
+    // Debug logging
+    const debugDiv = document.getElementById('debug');
+    function logDebug(message) {
+      console.log(message);
+      debugDiv.innerHTML += `<p>${message}</p>`;
+      if (debugDiv.children.length > 5) {
+        debugDiv.removeChild(debugDiv.firstChild);
+      }
+    }
+
     // Scene setup
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
+    logDebug('Three.js renderer initialized');
 
     // ARToolKit setup
-    const arToolkitSource = new THREEx.ArToolkitSource({
-      sourceType: 'webcam',
-    });
-    const arToolkitContext = new THREEx.ArToolkitContext({
-      cameraParametersUrl: 'camera_para.dat',
-      detectionMode: 'mono',
-    });
+    let arToolkitSource = null;
+    let arToolkitContext = null;
+    let arMarkerControls = null;
     const markerRoot = new THREE.Group();
     scene.add(markerRoot);
-    const arMarkerControls = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
-      type: 'pattern',
-      patternUrl: 'patt.hiro',
-    });
+    logDebug('Marker root added to scene');
+
+    // Verify file loading
+    function loadFile(url) {
+      return fetch(url)
+        .then(response => {
+          if (!response.ok) throw new Error(`Failed to load ${url}: ${response.status}`);
+          logDebug(`${url} loaded successfully`);
+          return response.text();
+        })
+        .catch(error => {
+          logDebug(`Error loading ${url}: ${error.message}`);
+          throw error;
+        });
+    }
 
     // Initialize AR
-    arToolkitSource.init(() => {
-      document.getElementById('ar-video').srcObject = arToolkitSource.domElement.srcObject;
-      onResize();
-    });
-    arToolkitContext.init(() => {
-      camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix());
+    Promise.all([
+      loadFile('calib.patt'),
+      loadFile('hiro.patt')
+    ])
+    .then(() => {
+      arToolkitSource = new THREEx.ArToolkitSource({
+        sourceType: 'webcam',
+      });
+      arToolkitSource.init(() => {
+        document.getElementById('ar-video').srcObject = arToolkitSource.domElement.srcObject;
+        logDebug('Webcam initialized');
+        onResize();
+      }, error => {
+        logDebug(`Webcam initialization failed: ${error}`);
+      });
+
+      arToolkitContext = new THREEx.ArToolkitContext({
+        cameraParametersUrl: 'calib.patt',
+        detectionMode: 'mono',
+      });
+      arToolkitContext.init(() => {
+        camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix());
+        logDebug('AR context initialized');
+      }, error => {
+        logDebug(`AR context initialization failed: ${error}`);
+      });
+
+      arMarkerControls = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
+        type: 'pattern',
+        patternUrl: 'hiro.patt',
+      });
+      logDebug('Marker controls initialized');
+    })
+    .catch(error => {
+      logDebug(`AR initialization failed: ${error.message}`);
     });
 
     // Resize handling
     function onResize() {
-      arToolkitSource.onResizeElement();
-      arToolkitSource.copyElementSizeTo(renderer.domElement);
-      if (arToolkitContext.arController !== null) {
-        arToolkitSource.copyElementSizeTo(arToolkitContext.arController.canvas);
+      if (arToolkitSource) {
+        arToolkitSource.onResizeElement();
+        arToolkitSource.copyElementSizeTo(renderer.domElement);
+        if (arToolkitContext && arToolkitContext.arController !== null) {
+          arToolkitSource.copyElementSizeTo(arToolkitContext.arController.canvas);
+        }
       }
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
+      logDebug('Window resized');
     }
     window.addEventListener('resize', onResize);
 
     // Move ground to markerRoot (scale adjusted for AR)
     const textureLoader = new THREE.TextureLoader();
-    const groundTexture = textureLoader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg');
+    const groundTexture = textureLoader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg', () => {
+      logDebug('Ground texture loaded');
+    }, undefined, (error) => {
+      logDebug(`Ground texture error: ${error.message}`);
+    });
     groundTexture.wrapS = groundTexture.wrapT = THREE.RepeatWrapping;
     groundTexture.repeat.set(10, 15);
     const groundGeometry = new THREE.PlaneGeometry(10, 10, 88, 88); // Scaled for AR (1 unit = 1 meter)
     const groundMaterial = new THREE.MeshLambertMaterial({ map: groundTexture });
     const ground = new THREE.Mesh(groundGeometry, groundMaterial);
     ground.rotation.x = -Math.PI / 2;
+    ground.visible = true; // Ensure visibility
     markerRoot.add(ground);
+    logDebug('Ground added to markerRoot');
 
     // Lighting
     const ambientLight = new THREE.AmbientLight(0x404040, 1);
@@ -228,6 +296,7 @@
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
     directionalLight.position.set(5, 20, 7.5);
     scene.add(directionalLight);
+    logDebug('Lighting added');
 
     // Targets
     const targets = [];
@@ -305,18 +374,24 @@
       target.position.set(Math.random() * 1.2 - 0.5, 0.1, -dist); // Scaled for AR
       target.rotation.x = Math.PI / 2;
       target.userData.distance = dist;
+      target.visible = true; // Ensure visibility
       const labelSprite = createDistanceLabelSprite(dist);
       labelSprite.position.set(0, -0.3, -0.2);
       target.add(labelSprite);
       markerRoot.add(target);
       targets.push({ mesh: target, distance: dist, hit: false, scale: 1, label: labelSprite });
+      logDebug(`Target spawned at ${dist}m`);
     }
     distances.forEach(() => spawnTarget());
 
     // Crossbow
     const crossbowGroup = new THREE.Group();
     const bodyGeometry = new THREE.BoxGeometry(0.02, 0.05, 0.25); // Scaled for AR
-    const woodTexture = textureLoader.load('https://threejs.org/examples/textures/hardwood2_diffuse.jpg');
+    const woodTexture = textureLoader.load('https://threejs.org/examples/textures/hardwood2_diffuse.jpg', () => {
+      logDebug('Wood texture loaded');
+    }, undefined, (error) => {
+      logDebug(`Wood texture error: ${error.message}`);
+    });
     const bodyMaterial = new THREE.MeshPhongMaterial({ map: woodTexture, shininess: 50 });
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
     body.position.set(0, 0, 0.02);
@@ -379,8 +454,10 @@
     grip.rotation.x = Math.PI / 2;
     crossbowGroup.add(grip);
 
+    crossbowGroup.visible = true; // Ensure visibility
     markerRoot.add(crossbowGroup);
     crossbowGroup.position.set(0, 0.1, 0); // Position above marker
+    logDebug('Crossbow group added to markerRoot');
 
     // Arrow
     const arrowTipGeometry = new THREE.ConeGeometry(0.018, 0.05, 32);
@@ -405,7 +482,9 @@
     loadedArrow.add(loadedTip);
     loadedArrow.position.set(0, 0.03, 0.015);
     loadedArrow.rotation.x = Math.PI / 2;
+    loadedArrow.visible = true; // Ensure visibility
     crossbowGroup.add(loadedArrow);
+    logDebug('Loaded arrow added to crossbow');
 
     // UI and Game State
     let score = 0;
@@ -575,6 +654,7 @@
           direction.z * baseSpeed
         );
         arrow.lookAt(arrow.position.clone().add(arrowVelocity));
+        logDebug('Arrow shot');
       }
     }
     document.addEventListener('click', shootArrow);
@@ -594,6 +674,7 @@
       document.getElementById('backBtn').style.display = 'block';
       stick.geometry.dispose();
       stick.geometry = new THREE.CylinderGeometry(0.0001, 0.0001, 0.0384, 99);
+      logDebug('Aim mode enabled');
     }
     function exitAim() {
       aimMode = false;
@@ -601,6 +682,7 @@
       document.getElementById('backBtn').style.display = 'none';
       stick.geometry.dispose();
       stick.geometry = new THREE.CylinderGeometry(0.0008, 0.0008, 0.045, 32);
+      logDebug('Aim mode disabled');
     }
     document.getElementById('aimBtn').addEventListener('click', aim);
     document.getElementById('backBtn').addEventListener('click', exitAim);
@@ -638,6 +720,7 @@
       arrowGroup.userData.is70mArrow = (targetMesh.userData && targetMesh.userData.distance === 7);
       enemyArrows.push(arrowGroup);
       markerRoot.add(arrowGroup);
+      logDebug('Enemy arrow spawned');
     }
     const enemyShotInterval = 4.5;
 
@@ -646,7 +729,15 @@
       if (gameOver) return;
       requestAnimationFrame(animate);
       time += 0.05;
-      arToolkitContext.update(arToolkitSource.domElement);
+      if (arToolkitContext && arToolkitSource) {
+        arToolkitContext.update(arToolkitSource.domElement);
+        // Check if marker is detected
+        if (markerRoot.visible) {
+          logDebug('Hiro marker detected');
+        } else {
+          logDebug('Hiro marker not detected');
+        }
+      }
 
       targets.forEach(target => {
         if (!target.hit) {
@@ -677,6 +768,7 @@
             gameOverMsg.style.marginTop = '10px';
             gameOverMsg.textContent = 'GAME OVER';
             infoDiv.appendChild(gameOverMsg);
+            logDebug('Game over: Target reached player');
           }
         } else {
           if (!target.hit && !gameOver) {
@@ -746,6 +838,7 @@
               const idx = targets.indexOf(target);
               if (idx !== -1) targets.splice(idx, 1);
               spawnTarget();
+              logDebug('Target hit, score: ' + score);
             }
           }
         });
@@ -753,6 +846,7 @@
           markerRoot.remove(arrow);
           arrow = null;
           isShooting = false;
+          logDebug('Arrow missed');
         }
       }
 
@@ -772,6 +866,7 @@
             playerHealth -= 4;
             updateHealth();
             showHitFlash();
+            logDebug('Player hit, health: ' + playerHealth);
           }
           markerRoot.remove(eArrow);
           enemyArrows.splice(i, 1);
@@ -786,12 +881,14 @@
             gameOverMsg.style.marginTop = '10px';
             gameOverMsg.textContent = 'GAME OVER';
             infoDiv.appendChild(gameOverMsg);
+            logDebug('Game over: Player health depleted');
           }
           continue;
         }
         if (eArrow.position.distanceTo(camera.position) > 12 || eArrow.position.y < -0.5) {
           markerRoot.remove(eArrow);
           enemyArrows.splice(i, 1);
+          logDebug('Enemy arrow removed');
         }
       }
 
@@ -800,6 +897,7 @@
         if (now - lastShotTime >= reloadTime) {
           reloadingMsg.remove();
           reloadingMsg = null;
+          logDebug('Reload complete');
         }
       }
 
@@ -845,6 +943,7 @@
       loadedArrow.visible = true;
       distances.forEach(() => spawnTarget());
       animate();
+      logDebug('Game restarted');
     });
 
     if (isTouchDevice() && window.top === window.self) {
@@ -854,6 +953,7 @@
       Array.from(document.body.children).forEach(function (el) {
         if (el.id !== 'iframeContainer') el.style.display = 'none';
       });
+      logDebug('Iframe mode activated for touch device');
     }
   </script>
 </body>
