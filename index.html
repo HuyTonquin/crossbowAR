@@ -222,9 +222,15 @@
 
     const startARButton = document.getElementById('startAR');
     const reticle = document.getElementById('reticle');
+    // Hide AR button if not supported
+    if (!('xr' in navigator)) {
+      startARButton.style.display = 'none';
+      logDebug('WebXR not supported on this browser');
+    }
     startARButton.addEventListener('click', async () => {
       if (!navigator.xr) {
         logDebug('WebXR not supported');
+        alert('WebXR AR not supported on this browser/device.');
         return;
       }
       try {
@@ -239,6 +245,7 @@
         logDebug('WebXR session started');
       } catch (error) {
         logDebug(`WebXR session failed: ${error.message}`);
+        alert('Failed to start AR session: ' + error.message);
       }
     });
 
@@ -253,6 +260,8 @@
 
     // Ground
     const textureLoader = new THREE.TextureLoader();
+    // Use CORS for texture loading
+    textureLoader.setCrossOrigin('anonymous');
     const groundTexture = textureLoader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg', () => {
       logDebug('Ground texture loaded');
     }, undefined, (error) => {
@@ -939,7 +948,8 @@
       logDebug('Game restarted');
     });
 
-    if (isTouchDevice() && window.top === window.self) {
+    // Iframe logic: Only activate if not in an iframe (prevents infinite nesting on GitHub Pages)
+    if (isTouchDevice() && window.self === window.top) {
       document.body.style.overflow = "hidden";
       document.getElementById('iframeContainer').style.display = 'block';
       document.getElementById('gameIframe').src = window.location.href;
@@ -947,6 +957,22 @@
         if (el.id !== 'iframeContainer') el.style.display = 'none';
       });
       logDebug('Iframe mode activated for touch device');
+    }
+
+    // Fallback message for browsers that do not support WebXR
+    if (!('xr' in navigator)) {
+      const fallbackMsg = document.createElement('div');
+      fallbackMsg.style.position = 'fixed';
+      fallbackMsg.style.top = '50%';
+      fallbackMsg.style.left = '50%';
+      fallbackMsg.style.transform = 'translate(-50%, -50%)';
+      fallbackMsg.style.background = '#222';
+      fallbackMsg.style.color = '#fff';
+      fallbackMsg.style.padding = '2em';
+      fallbackMsg.style.borderRadius = '1em';
+      fallbackMsg.style.zIndex = 99999;
+      fallbackMsg.innerHTML = 'AR mode is not supported on this browser/device.<br>Please use a compatible mobile browser for AR features.';
+      document.body.appendChild(fallbackMsg);
     }
   </script>
 </body>
