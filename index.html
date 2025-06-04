@@ -1,21 +1,32 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>3D Crossbow Shooting Simulation</title>
+  <title>AR Crossbow Shooting Simulation</title>
   <style>
     body {
       margin: 0;
       overflow: hidden;
-      background: #228B22;
+      background: #228B22; /* Fallback background */
     }
-
     canvas {
       display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
     }
-
+    #ar-video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: -1;
+    }
     #info {
       position: absolute;
       top: 10px;
@@ -25,9 +36,8 @@
       background: rgba(20, 146, 220, 0.7);
       padding: 10px;
       border-radius: 5px;
+      z-index: 10;
     }
-
-    /* Style for the shoot button */
     #shootBtn {
       position: absolute;
       bottom: 30px;
@@ -42,10 +52,7 @@
       opacity: 0.85;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
       display: none;
-      /* Hidden by default, shown on touch devices */
     }
-
-    /* Health bar flash effect */
     #hitFlash {
       display: none;
       position: fixed;
@@ -58,189 +65,178 @@
       pointer-events: none;
       animation: none;
     }
-
     @keyframes hitFlashAnim {
-      0% {
-        opacity: 0.7;
-      }
-
-      100% {
-        opacity: 0;
-      }
+      0% { opacity: 0.7; }
+      100% { opacity: 0; }
     }
-
-    /* Move health bar to top right */
     #healthBarContainer {
       position: absolute;
       top: 10px;
       right: 20px;
-      margin-top: 0 !important;
-      z-index: 100;
-      /* Optional: add a subtle background for visibility */
       background: rgba(20, 146, 220, 0.7);
       padding: 8px 14px;
       border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.13);
       display: block;
+      z-index: 10;
+    }
+    #restartBtn {
+      position: absolute;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      font-size: 1.3em;
+      padding: 0.5em 1.2em;
+      border-radius: 0.5em;
+      border: none;
+      background: #e67e22;
+      color: white;
+      opacity: 0.85;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    #aimBtn {
+      position: absolute;
+      bottom: 100px;
+      right: 30px;
+      z-index: 10;
+      font-size: 1.3em;
+      padding: 0.5em 1.2em;
+      border-radius: 0.5em;
+      border: none;
+      background: #43a047;
+      color: white;
+      opacity: 0.85;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    #backBtn {
+      position: absolute;
+      bottom: 100px;
+      right: 130px;
+      z-index: 10;
+      font-size: 1.3em;
+      padding: 0.5em 1.2em;
+      border-radius: 0.5em;
+      border: none;
+      background: #b71c1c;
+      color: white;
+      opacity: 0.85;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      display: none;
+    }
+    #iframeContainer {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1000;
+      background: #228B22;
+    }
+    #gameIframe {
+      width: 100vw;
+      height: 100vh;
+      border: none;
     }
   </style>
 </head>
-
 <body>
+  <video id="ar-video"></video>
   <div id="info">
     <p>Co Loa Crossbow</p>
     <p>Score: <span id="score">0</span></p>
     <p>Accuracy: <span id="accuracy">0%</span></p>
-    <!-- Health bar replaces text -->
   </div>
-  <!-- Move health bar container outside #info for top-right positioning -->
   <div id="healthBarContainer">
     <div id="healthBarBg" style="width:120px;height:18px;background:#333;border-radius:8px;overflow:hidden;">
-      <div id="healthBar" style="height:100%;width:100%;background:#4caf50;transition:width 0.3s,background 0.3s;">
-      </div>
+      <div id="healthBar" style="height:100%;width:100%;background:#4caf50;transition:width 0.3s,background 0.3s;"></div>
     </div>
     <span id="healthLabel" style="margin-left:10px;vertical-align:middle;">100</span>
   </div>
-  <!-- Shoot button for mobile/touch -->
   <button id="shootBtn">Shoot</button>
-  <!-- Aim button -->
-  <button id="aimBtn" style="
-    position: absolute;
-    bottom: 100px;
-    right: 30px;
-    z-index: 10;
-    font-size: 1.3em;
-    padding: 0.5em 1.2em;
-    border-radius: 0.5em;
-    border: none;
-    background: #43a047;
-    color: white;
-    opacity: 0.85;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  ">Aim</button>
-  <!-- Back button for aim mode (hidden by default) -->
-  <button id="backBtn" style="
-    position: absolute;
-    bottom: 100px;
-    right: 130px;
-    z-index: 10;
-    font-size: 1.3em;
-    padding: 0.5em 1.2em;
-    border-radius: 0.5em;
-    border: none;
-    background: #b71c1c;
-    color: white;
-    opacity: 0.85;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    display: none;
-  ">Back</button>
-  <!-- Iframe container for mobile mode -->
-  <div id="iframeContainer"
-    style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:1000;background:#228B22;">
-    <iframe id="gameIframe" src="" style="width:100vw;height:100vh;border:none;"></iframe>
+  <button id="restartBtn">Restart</button>
+  <button id="aimBtn">Aim</button>
+  <button id="backBtn">Back</button>
+  <div id="iframeContainer">
+    <iframe id="gameIframe" src=""></iframe>
   </div>
-
+  <div id="hitFlash"></div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
-  <!-- Add this in your <head> or before your script -->
   <script src="https://cdn.jsdelivr.net/npm/fflate@0.7.4/umd/index.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/EXRLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/three.js/build/ar-threex.js"></script>
   <script>
     // Scene setup
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
-    renderer.setClearColor(0x228B22);
 
-    // Remove or comment out the CubeTextureLoader skybox code
-    // const loader = new THREE.CubeTextureLoader();
-    // const skyboxUrls = [ ... ];
-    // scene.background = loader.load(skyboxUrls);
-
-    // Use EXRLoader for .exr file
-    const exrLoader = new THREE.EXRLoader();
-    exrLoader.load('https://res.cloudinary.com/diuwndnqk/raw/upload/v1748848883/meadow_2_2k_oyathf.exr', function (texture) {
-      texture.mapping = THREE.EquirectangularReflectionMapping;
-      scene.background = texture;    // For visible background
-      scene.environment = texture;   // For PBR lighting/reflections
+    // ARToolKit setup
+    const arToolkitSource = new THREEx.ArToolkitSource({
+      sourceType: 'webcam',
+    });
+    const arToolkitContext = new THREEx.ArToolkitContext({
+      cameraParametersUrl: 'camera_para.dat',
+      detectionMode: 'mono',
+    });
+    const markerRoot = new THREE.Group();
+    scene.add(markerRoot);
+    const arMarkerControls = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
+      type: 'pattern',
+      patternUrl: 'patt.hiro',
     });
 
-    // Lighting for better graphics
+    // Initialize AR
+    arToolkitSource.init(() => {
+      document.getElementById('ar-video').srcObject = arToolkitSource.domElement.srcObject;
+      onResize();
+    });
+    arToolkitContext.init(() => {
+      camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix());
+    });
+
+    // Resize handling
+    function onResize() {
+      arToolkitSource.onResizeElement();
+      arToolkitSource.copyElementSizeTo(renderer.domElement);
+      if (arToolkitContext.arController !== null) {
+        arToolkitSource.copyElementSizeTo(arToolkitContext.arController.canvas);
+      }
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+    window.addEventListener('resize', onResize);
+
+    // Move ground to markerRoot (scale adjusted for AR)
+    const textureLoader = new THREE.TextureLoader();
+    const groundTexture = textureLoader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg');
+    groundTexture.wrapS = groundTexture.wrapT = THREE.RepeatWrapping;
+    groundTexture.repeat.set(10, 15);
+    const groundGeometry = new THREE.PlaneGeometry(10, 10, 88, 88); // Scaled for AR (1 unit = 1 meter)
+    const groundMaterial = new THREE.MeshLambertMaterial({ map: groundTexture });
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    ground.rotation.x = -Math.PI / 2;
+    markerRoot.add(ground);
+
+    // Lighting
     const ambientLight = new THREE.AmbientLight(0x404040, 1);
     scene.add(ambientLight);
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
     directionalLight.position.set(5, 20, 7.5);
     scene.add(directionalLight);
 
-    // Ground with texture
-    const textureLoader = new THREE.TextureLoader();
-    const groundTexture = textureLoader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg');
-    groundTexture.wrapS = groundTexture.wrapT = THREE.RepeatWrapping;
-    groundTexture.repeat.set(10, 15);
-    const groundGeometry = new THREE.PlaneGeometry(85, 85, 88, 88);
-    const groundMaterial = new THREE.MeshLambertMaterial({ map: groundTexture });
-    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-    ground.rotation.x = -Math.PI / 2; // Correct rotation for ground
-    scene.add(ground);
-
-    // Add 3D background elements: Hills
-    // const hillGeometry = new THREE.SphereGeometry(20, 32, 32);
-    // const hillMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22, emissive: 0x1A5F1A });
-    // const hill1 = new THREE.Mesh(hillGeometry, hillMaterial);
-    // hill1.position.set(-30, -10, -80);
-    // hill1.scale.set(1.5, 0.5, 1); // Flatten for hill-like shape
-    // scene.add(hill1);
-    // const hill2 = new THREE.Mesh(hillGeometry, hillMaterial);
-    // hill2.position.set(30, -10, -70);
-    // hill2.scale.set(1.2, 0.6, 1.3);
-    // scene.add(hill2);
-
-    // Add 3D background elements: Trees
-    // const treeTrunkGeometry = new THREE.CylinderGeometry(0.5, 0.5, 5, 16);
-    // const treeTrunkMaterial = new THREE.MeshPhongMaterial({ color: 0x8B4513, shininess: 20 });
-    // const treeFoliageGeometry = new THREE.ConeGeometry(3, 6, 16);
-    // const treeFoliageMaterial = new THREE.MeshPhongMaterial({ color: 0x2E8B57, shininess: 30 });
-    // function createTree(x, z) {
-    //   const tree = new THREE.Group();
-    //   const trunk = new THREE.Mesh(treeTrunkGeometry, treeTrunkMaterial);
-    //   trunk.position.set(0, 2.5, 0);
-    //   const foliage = new THREE.Mesh(treeFoliageGeometry, treeFoliageMaterial);
-    //   foliage.position.set(0, 6, 0);
-    //   tree.add(trunk);
-    //   tree.add(foliage);
-    //   tree.position.set(x, 0, z);
-    //   scene.add(tree);
-    // }
-    // createTree(-20, -60);
-    // createTree(15, -55);
-    // createTree(-10, -70);
-    // createTree(25, -65);
-
-    // Add 3D background elements: Clouds
-    // const cloudGeometry = new THREE.SphereGeometry(5, 12, 22);
-    // const cloudMaterial = new THREE.MeshPhongMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.7 });
-    // const cloud1 = new THREE.Mesh(cloudGeometry, cloudMaterial);
-    // cloud1.position.set(-25, 20, -80);
-    // cloud1.scale.set(1.5, 0.8, 1.2);
-    // scene.add(cloud1);
-    // const cloud2 = new THREE.Mesh(cloudGeometry, cloudMaterial);
-    // cloud2.position.set(20, 25, -75);
-    // cloud2.scale.set(1.8, 0.7, 1.3);
-    // scene.add(cloud2);
-
-    // Targets at different distances with improved graphics
+    // Targets
     const targets = [];
-    // Bullseye target: use a flat cylinder with bullseye texture
-    const targetGeometry = new THREE.CylinderGeometry(1.5, 1.5, 0.8, 64);
-
-    // Bullseye texture using canvas
+    const targetGeometry = new THREE.CylinderGeometry(0.15, 0.15, 0.08, 64); // Scaled for AR
     function createBullseyeTexture() {
       const size = 256;
       const canvas = document.createElement('canvas');
       canvas.width = canvas.height = size;
       const ctx = canvas.getContext('2d');
-      // Draw bullseye rings
       ctx.fillStyle = '#fff';
       ctx.beginPath();
       ctx.arc(size / 2, size / 2, size / 2, 0, 2 * Math.PI); ctx.fill();
@@ -263,9 +259,8 @@
     }
     const bullseyeTexture = createBullseyeTexture();
     const targetMaterial = new THREE.MeshPhongMaterial({ map: bullseyeTexture, shininess: 30 });
-    const distances = [70, 50, 60];
+    const distances = [7, 5, 6]; // Scaled for AR (meters)
 
-    // Helper to create a label sprite for a given distance
     function createDistanceLabelSprite(distance) {
       const canvas = document.createElement('canvas');
       canvas.width = 128;
@@ -279,13 +274,11 @@
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(`${distance}m`, canvas.width / 2, canvas.height / 2);
-      // Store canvas and context for later updates
       const texture = new THREE.CanvasTexture(canvas);
       texture.needsUpdate = true;
       const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
       const sprite = new THREE.Sprite(material);
-      sprite.scale.set(3, 1, 1);
-      // Attach update method to sprite for dynamic text
+      sprite.scale.set(0.3, 0.1, 1); // Scaled for AR
       sprite._distanceCanvas = canvas;
       sprite._distanceCtx = ctx;
       sprite._distanceTexture = texture;
@@ -302,7 +295,6 @@
         this._distanceTexture.needsUpdate = true;
         this._distanceValue = newDist;
       };
-      // Initial draw
       sprite.updateDistance(distance);
       return sprite;
     }
@@ -310,58 +302,48 @@
     function spawnTarget() {
       const dist = distances[Math.floor(Math.random() * distances.length)];
       const target = new THREE.Mesh(targetGeometry, targetMaterial.clone());
-      target.position.set(Math.random() * 12 - 5, 1, -dist);
+      target.position.set(Math.random() * 1.2 - 0.5, 0.1, -dist); // Scaled for AR
       target.rotation.x = Math.PI / 2;
-      target.userData.distance = dist; // <-- add this line
+      target.userData.distance = dist;
       const labelSprite = createDistanceLabelSprite(dist);
-      labelSprite.position.set(0, -3, -2);
+      labelSprite.position.set(0, -0.3, -0.2);
       target.add(labelSprite);
-      scene.add(target);
-      targets.push({ mesh: target, distance: dist, hit: false, scale: 10, label: labelSprite });
+      markerRoot.add(target);
+      targets.push({ mesh: target, distance: dist, hit: false, scale: 1, label: labelSprite });
     }
     distances.forEach(() => spawnTarget());
 
-    // Enhanced Crossbow with Aiming Stick and Additional Details
+    // Crossbow
     const crossbowGroup = new THREE.Group();
-
-    // Body (main stock, slightly wider and longer for realism)
-    const bodyGeometry = new THREE.BoxGeometry(0.2, 0.5, 2.5);
+    const bodyGeometry = new THREE.BoxGeometry(0.02, 0.05, 0.25); // Scaled for AR
     const woodTexture = textureLoader.load('https://threejs.org/examples/textures/hardwood2_diffuse.jpg');
     const bodyMaterial = new THREE.MeshPhongMaterial({ map: woodTexture, shininess: 50 });
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    body.position.set(0, 0, 0.2);
+    body.position.set(0, 0, 0.02);
     crossbowGroup.add(body);
 
-    // Aiming Stick (fixed, no rotation with lobbing angle)
-    const stickGeometry = new THREE.CylinderGeometry(0.008, 0.008, 0.45, 32);
-    // Change stick color to red
+    const stickGeometry = new THREE.CylinderGeometry(0.0008, 0.0008, 0.045, 32);
     const stickMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000, shininess: 100 });
     const stick = new THREE.Mesh(stickGeometry, stickMaterial);
-    stick.position.set(-0.06, 0.32, 1.3);
+    stick.position.set(-0.006, 0.032, 0.13);
     crossbowGroup.add(stick);
 
-    // Limbs (bow arms, more like reference image: pronounced outward curve, thicker, slight taper)
     const leftLimbCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0.1, 0.2, -0.9),   // near center
-      new THREE.Vector3(0.35, 0.2, -1.0),    // outward and up
-      new THREE.Vector3(0.9, 0.2, -1.3),    // further out, slight down
-      new THREE.Vector3(2.5, 0.05, -1.1)    // tip, slightly down and forward
+      new THREE.Vector3(0.01, 0.02, -0.09),
+      new THREE.Vector3(0.035, 0.02, -0.1),
+      new THREE.Vector3(0.09, 0.02, -0.13),
+      new THREE.Vector3(0.25, 0.005, -0.11)
     ]);
     const rightLimbCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-0.1, 0.2, -0.9),
-      new THREE.Vector3(-0.35, 0.2, -1.0),
-      new THREE.Vector3(-0.9, 0.2, -1.3),
-      new THREE.Vector3(-2.5, 0.05, -1.1)
+      new THREE.Vector3(-0.01, 0.02, -0.09),
+      new THREE.Vector3(-0.035, 0.02, -0.1),
+      new THREE.Vector3(-0.09, 0.02, -0.13),
+      new THREE.Vector3(-0.25, 0.005, -0.11)
     ]);
-    // Use TubeGeometry with constant radius (no taper, avoids NaN error in r134)
     function createTaperedLimb(curve) {
       return new THREE.Mesh(
-        new THREE.TubeGeometry(
-          curve, 32,
-          0.13, // constant radius, no taper
-          16, false
-        ),
-        new THREE.MeshPhongMaterial({ color: 0xB8860B, shininess: 80 }) // golden brown
+        new THREE.TubeGeometry(curve, 32, 0.013, 16, false),
+        new THREE.MeshPhongMaterial({ color: 0xB8860B, shininess: 80 })
       );
     }
     const leftLimb = createTaperedLimb(leftLimbCurve);
@@ -369,84 +351,71 @@
     crossbowGroup.add(leftLimb);
     crossbowGroup.add(rightLimb);
 
-    // Add crossbow string (curved, connects limb tips)
     const stringCurveSag = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-2.5, 0.05, -1.1), // right limb tip
-      new THREE.Vector3(0, 0.3, 1.2),      // sag in the middle
-      new THREE.Vector3(2.5, 0.05, -1.1)   // left limb tip
+      new THREE.Vector3(-0.25, 0.005, -0.11),
+      new THREE.Vector3(0, 0.03, 0.12),
+      new THREE.Vector3(0.25, 0.005, -0.11)
     ]);
     const stringCurveStraight = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-2.5, 0.08, -1.0),
-      new THREE.Vector3(0, 0.08, -1.0),   // straight line between tips
-      new THREE.Vector3(2.5, 0.08, -1.0)
+      new THREE.Vector3(-0.25, 0.008, -0.1),
+      new THREE.Vector3(0, 0.008, -0.1),
+      new THREE.Vector3(0.25, 0.008, -0.1)
     ]);
-    let bowStringGeometry = new THREE.TubeGeometry(stringCurveSag, 2, 0.01, 8, false);
+    let bowStringGeometry = new THREE.TubeGeometry(stringCurveSag, 2, 0.001, 8, false);
     const stringMaterial = new THREE.MeshPhongMaterial({ color: 0x888888, shininess: 50 });
     const bowString = new THREE.Mesh(bowStringGeometry, stringMaterial);
     crossbowGroup.add(bowString);
 
-    // Trigger Guard (small curved piece)
-    const triggerGeometry = new THREE.TorusGeometry(0.2, 0.05, 5, 100, Math.PI);
+    const triggerGeometry = new THREE.TorusGeometry(0.02, 0.005, 5, 100, Math.PI);
     const metalMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00, shininess: 100 });
     const triggerGuard = new THREE.Mesh(triggerGeometry, metalMaterial);
-    triggerGuard.position.set(0, -0.15, 0.5);
+    triggerGuard.position.set(0, -0.015, 0.05);
     triggerGuard.rotation.x = Math.PI / 2;
     crossbowGroup.add(triggerGuard);
 
-    // Sight (small ring for aiming)
-
-
-    // Grip (handle for holding)
-    const gripGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.4, 32);
+    const gripGeometry = new THREE.CylinderGeometry(0.01, 0.01, 0.04, 32);
     const grip = new THREE.Mesh(gripGeometry, bodyMaterial);
-    grip.position.set(0, -0.2, 0.3);
+    grip.position.set(0, -0.02, 0.03);
     grip.rotation.x = Math.PI / 2;
     crossbowGroup.add(grip);
 
-    scene.add(crossbowGroup);
-    camera.position.set(0, 1.5, 2.5);
-    camera.lookAt(0, 1, 0);
+    markerRoot.add(crossbowGroup);
+    crossbowGroup.position.set(0, 0.1, 0); // Position above marker
 
-    // Arrow with improved graphics
-    const arrowTipGeometry = new THREE.ConeGeometry(0.18, 0.5, 32);
+    // Arrow
+    const arrowTipGeometry = new THREE.ConeGeometry(0.018, 0.05, 32);
     const arrowTipMaterial = new THREE.MeshPhongMaterial({ color: 0x888888, shininess: 100 });
 
-    // Arrow display: loaded on crossbow when not shooting, flies when shot
     let arrow = null;
     let arrowVelocity = new THREE.Vector3();
     let isShooting = false;
     let lobAngle = 0;
 
-    // Create the loaded arrow and add to crossbow
     const loadedArrow = new THREE.Group();
     const loadedShaft = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.03, 0.03, 2, 32),
+      new THREE.CylinderGeometry(0.003, 0.003, 0.2, 32),
       new THREE.MeshPhongMaterial({ color: 0xFFD700, shininess: 50 })
     );
     const loadedTip = new THREE.Mesh(
-      new THREE.ConeGeometry(0.05, -0.12, 22),
+      new THREE.ConeGeometry(0.005, -0.012, 22),
       arrowTipMaterial
     );
-    loadedTip.position.set(0, -0.9, -0.02);
+    loadedTip.position.set(0, -0.09, -0.002);
     loadedArrow.add(loadedShaft);
     loadedArrow.add(loadedTip);
-    // Position the loaded arrow on the crossbow (adjust as needed)
-    loadedArrow.position.set(0, 0.3, 0.15);
+    loadedArrow.position.set(0, 0.03, 0.015);
     loadedArrow.rotation.x = Math.PI / 2;
     crossbowGroup.add(loadedArrow);
 
-    // Score
+    // UI and Game State
     let score = 0;
     const scoreDisplay = document.getElementById('score');
-
-    // Player health
     let playerHealth = 100;
     const healthBar = document.getElementById('healthBar');
     const healthLabel = document.getElementById('healthLabel');
-    // Hit flash overlay
     const hitFlash = document.getElementById('hitFlash');
     function showHitFlash() {
-      if (!hitFlash) return; // Prevent error if element is missing
+      if (!hitFlash) return;
       hitFlash.style.display = 'block';
       hitFlash.style.animation = 'hitFlashAnim 0.35s linear';
       setTimeout(() => {
@@ -457,7 +426,6 @@
     function updateHealth() {
       const percent = Math.max(0, playerHealth) / 100;
       healthBar.style.width = (percent * 100) + '%';
-      // Color: green > yellow > red
       if (percent > 0.6) {
         healthBar.style.background = '#4caf50';
       } else if (percent > 0.3) {
@@ -467,8 +435,6 @@
       }
       healthLabel.textContent = Math.max(0, playerHealth);
     }
-
-    // Accuracy tracking
     let arrowsShot = 0;
     let arrowsHit = 0;
     const accuracyDisplay = document.getElementById('accuracy');
@@ -476,96 +442,67 @@
       let percent = arrowsShot === 0 ? 0 : Math.round((arrowsHit / arrowsShot) * 100);
       accuracyDisplay.textContent = percent + '%';
     }
-
-    // Target speed control
-    let targetSpeed = 0.05; // initial speed
+    let targetSpeed = 0.005; // Scaled for AR
     let targetsShouldMove = false;
-
-    // Reload time variables
-    let reloadTime = 1.2; // seconds
+    let reloadTime = 1.2;
     let lastShotTime = -Infinity;
     let reloadingMsg = null;
+    let gameOver = false;
 
-    // Mouse controls for aiming and lobbing angle
+    // Controls
     document.addEventListener('mousemove', (event) => {
       const mouseX = (event.clientX / window.innerWidth) * 2 - 1;
       const mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
-      // Aiming: Rotate crossbow group left/right and up/down
       crossbowGroup.rotation.y = -mouseX * Math.PI / 4;
       crossbowGroup.rotation.x = mouseY * Math.PI / 8;
-
-      // Keep stick visually level (cancel out crossbowGroup X rotation)
       stick.rotation.x = -crossbowGroup.rotation.x;
-
-      // Lobbing angle: Adjust based on vertical mouse movement
-      // Map mouseY (-1 to 1) to lobAngle (0 to 70 degrees)
       lobAngle = (1 - (mouseY + 1) / 2) * 5;
-      lobAngle = Math.max(0, Math.min(5, lobAngle)); // Clamp between 0 and 70 degrees
+      lobAngle = Math.max(0, Math.min(5, lobAngle));
     });
 
-    // --- Touch controls for mobile aiming ---
     let lastTouchX = null;
     let lastTouchY = null;
     let touchYaw = 0;
     let touchPitch = 0;
-
     document.addEventListener('touchstart', function (e) {
       if (e.touches.length === 1) {
         lastTouchX = e.touches[0].clientX;
         lastTouchY = e.touches[0].clientY;
-        // Store current rotation as base
         touchYaw = crossbowGroup.rotation.y;
         touchPitch = crossbowGroup.rotation.x;
       }
     }, { passive: false });
-
     document.addEventListener('touchmove', function (e) {
       if (e.touches.length === 1) {
         e.preventDefault();
         const dx = e.touches[0].clientX - lastTouchX;
         const dy = e.touches[0].clientY - lastTouchY;
-        // Sensitivity factors (tweak as needed)
         const yawFactor = Math.PI / 400;
         const pitchFactor = Math.PI / 600;
-        // Update crossbow rotation
         crossbowGroup.rotation.y = touchYaw - dx * yawFactor;
-        crossbowGroup.rotation.x = touchPitch + dy * pitchFactor;
-        // Clamp pitch
-        crossbowGroup.rotation.x = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, crossbowGroup.rotation.x));
-        // Keep stick visually level
+        crossbowGroup.rotation.x = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, crossbowGroup.rotation.x + dy * pitchFactor));
         stick.rotation.x = -crossbowGroup.rotation.x;
-        // Update lob angle based on vertical drag position (relative to screen)
         const touchYNorm = (e.touches[0].clientY / window.innerHeight) * 2 - 1;
         lobAngle = (1 - (touchYNorm + 1) / 2) * 5;
         lobAngle = Math.max(0, Math.min(5, lobAngle));
       }
     }, { passive: false });
 
-    // Show shoot button and 360-degree touchpad on touch devices
     function isTouchDevice() {
       return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     }
     const shootBtn = document.getElementById('shootBtn');
-    const touchpad = document.getElementById('touchpad');
-    const touchpadInner = document.getElementById('touchpad-inner');
     if (isTouchDevice()) {
       shootBtn.style.display = 'block';
-      // Remove touchpad for mobile motion control
-      if (touchpad) touchpad.style.display = 'none';
     }
 
-    // --- Device Orientation Controls for Mobile ---
     if (isTouchDevice() && window.DeviceOrientationEvent) {
       let initialGamma = null, initialBeta = null;
       let baseYaw = 0, basePitch = 0;
       let orientationActive = false;
-
-      // Helper to clamp pitch
       function clampPitch(pitch) {
         return Math.max(-Math.PI / 4, Math.min(Math.PI / 4, pitch));
       }
-
-      // On first orientation event, set base
       window.addEventListener('deviceorientation', function (event) {
         if (!orientationActive) {
           initialGamma = event.gamma;
@@ -575,28 +512,20 @@
           orientationActive = true;
         }
         if (orientationActive && initialGamma !== null && initialBeta !== null) {
-          // gamma: left/right tilt (-90 to 90), beta: up/down tilt (-180 to 180)
-          // Map gamma to yaw, beta to pitch
-          const yawFactor = Math.PI / 180 / 1.2;   // sensitivity
-          const pitchFactor = Math.PI / 180 / 1.5; // sensitivity
+          const yawFactor = Math.PI / 180 / 1.2;
+          const pitchFactor = Math.PI / 180 / 1.5;
           let dGamma = event.gamma - initialGamma;
           let dBeta = event.beta - initialBeta;
-          // Clamp deltas to avoid wild jumps
           dGamma = Math.max(-60, Math.min(60, dGamma));
           dBeta = Math.max(-60, Math.min(60, dBeta));
           crossbowGroup.rotation.y = baseYaw - dGamma * yawFactor;
           crossbowGroup.rotation.x = clampPitch(basePitch + dBeta * pitchFactor);
           stick.rotation.x = -crossbowGroup.rotation.x;
-
-          // Update lob angle based on pitch (vertical phone tilt)
-          // Map pitch (-PI/4 to PI/4) to lobAngle (0 to 5)
           const normPitch = (crossbowGroup.rotation.x + Math.PI / 4) / (Math.PI / 2);
           lobAngle = (1 - normPitch) * 5;
           lobAngle = Math.max(0, Math.min(5, lobAngle));
         }
       }, true);
-
-      // Reset base on touchstart (user can re-center aim)
       document.addEventListener('touchstart', function () {
         initialGamma = null;
         initialBeta = null;
@@ -606,57 +535,40 @@
       }, { passive: false });
     }
 
-    // Extract shoot logic to a function
     function shootArrow() {
       const now = performance.now() / 1000;
       if (!isShooting && now - lastShotTime >= reloadTime && !gameOver) {
         isShooting = true;
         lastShotTime = now;
-
-        // Hide loaded arrow
         loadedArrow.visible = false;
-
-        // Make string straight (no sag)
         bowString.geometry.dispose();
-        bowString.geometry = new THREE.TubeGeometry(stringCurveStraight, 2, 0.01, 8, false);
-
+        bowString.geometry = new THREE.TubeGeometry(stringCurveStraight, 2, 0.001, 8, false);
         arrowsShot++;
         updateAccuracy();
-
-        // Create flying arrow
         arrow = new THREE.Group();
         const shaft = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.05, 0.05, 0.8, 12),
+          new THREE.CylinderGeometry(0.005, 0.005, 0.08, 12),
           new THREE.MeshPhongMaterial({ color: 0xFFD700, shininess: 50 })
         );
         const tip = new THREE.Mesh(
-          new THREE.ConeGeometry(0.1, 0.8, 12),
+          new THREE.ConeGeometry(0.01, 0.08, 12),
           arrowTipMaterial
         );
-        tip.position.set(0, 0.8, 0);
+        tip.position.set(0, 0.08, 0);
         arrow.add(shaft);
         arrow.add(tip);
-
-        // Place arrow at loaded position in world space
         loadedArrow.updateMatrixWorld();
         const loadedWorldPos = new THREE.Vector3();
         loadedArrow.getWorldPosition(loadedWorldPos);
         arrow.position.copy(loadedWorldPos);
-
-        // Set arrow orientation to match crossbow
         arrow.quaternion.copy(crossbowGroup.quaternion);
-
-        scene.add(arrow);
-
-        // Calculate direction from crossbow (no pitch), then apply lob angle for arrow only
+        markerRoot.add(arrow);
         const direction = new THREE.Vector3(0, 0, -1);
         direction.applyQuaternion(crossbowGroup.quaternion);
-        // Apply lob angle to direction (rotate around X axis)
         const lobRad = lobAngle * Math.PI / 180;
         const lobMatrix = new THREE.Matrix4().makeRotationX(lobRad);
         direction.applyMatrix4(lobMatrix).normalize();
-
-        const baseSpeed = 55;
+        const baseSpeed = 5.5; // Scaled for AR
         arrowVelocity.set(
           direction.x * baseSpeed,
           direction.y * baseSpeed,
@@ -665,11 +577,7 @@
         arrow.lookAt(arrow.position.clone().add(arrowVelocity));
       }
     }
-
-    // Mouse click triggers shoot
     document.addEventListener('click', shootArrow);
-
-    // Touch/click on button triggers shoot
     shootBtn.addEventListener('touchstart', function (e) {
       e.preventDefault();
       shootArrow();
@@ -679,130 +587,89 @@
       shootArrow();
     });
 
-    // Aim function: move camera to stick's tip at z = +0.8 (stick local coordinates)
     let aimMode = false;
     function aim() {
       aimMode = true;
       document.getElementById('aimBtn').style.display = 'none';
       document.getElementById('backBtn').style.display = 'block';
-      // Change stick geometry for aim mode
       stick.geometry.dispose();
-      stick.geometry = new THREE.CylinderGeometry(0.001, 0.001, 0.384, 99);
-      // Camera will be set in animate() when aimMode is true
+      stick.geometry = new THREE.CylinderGeometry(0.0001, 0.0001, 0.0384, 99);
     }
-
-    // Back function: exit aim mode
     function exitAim() {
       aimMode = false;
       document.getElementById('aimBtn').style.display = 'block';
       document.getElementById('backBtn').style.display = 'none';
-      // Restore stick geometry to original
       stick.geometry.dispose();
-      stick.geometry = new THREE.CylinderGeometry(0.008, 0.008, 0.45, 32);
+      stick.geometry = new THREE.CylinderGeometry(0.0008, 0.0008, 0.045, 32);
     }
-
-    // Add event listeners to Aim and Back buttons
     document.getElementById('aimBtn').addEventListener('click', aim);
     document.getElementById('backBtn').addEventListener('click', exitAim);
 
-    // Find the stick mesh for camera positioning
-    // (already defined as 'stick')
-
-    // Game over flag
-    let gameOver = false;
-
-    // --- Target Arrow Logic ---
-    // Store enemy arrows
     const enemyArrows = [];
-    // Helper to spawn an enemy arrow from a target towards the player, with lobbing and false ratio
     function spawnEnemyArrow(targetMesh, scoreForFalseRatio) {
       const arrowGroup = new THREE.Group();
       const shaft = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.05, 0.05, 0.8, 12),
+        new THREE.CylinderGeometry(0.005, 0.005, 0.08, 12),
         new THREE.MeshPhongMaterial({ color: 0x888888, shininess: 30 })
       );
       const tip = new THREE.Mesh(
-        new THREE.ConeGeometry(0.1, 0.3, 12),
+        new THREE.ConeGeometry(0.01, 0.03, 12),
         new THREE.MeshPhongMaterial({ color: 0xff0000, shininess: 80 })
       );
-      tip.position.set(0, 0.55, 0);
+      tip.position.set(0, 0.055, 0);
       arrowGroup.add(shaft);
       arrowGroup.add(tip);
-
-      // Start at target position
       arrowGroup.position.copy(targetMesh.position);
-
-      // Calculate direction to player camera
       const playerPos = camera.position.clone();
-
-      // --- Robust false ratio logic ---
-      // Use score to determine false ratio
       let falseRatio = scoreForFalseRatio < 150 ? 0.3 : 0.2;
-
-      // Determine if this shot should miss
       let miss = Math.random() < falseRatio;
       let targetVec = playerPos.clone();
       if (miss) {
-        // Offset aim randomly (miss left/right/up/down)
-        targetVec.x += (Math.random() - 0.5) * 6;
-        targetVec.y += (Math.random() - 0.5) * 6;
+        targetVec.x += (Math.random() - 0.5) * 0.6;
+        targetVec.y += (Math.random() - 0.5) * 0.6;
       }
-
-      // Calculate direction and lobbing
       const dir = targetVec.sub(targetMesh.position).normalize();
-      // Add lobbing: add upward velocity component
-      const lobStrength = 0.42; // tweak for arc
+      const lobStrength = 0.42;
       const lobDir = dir.clone();
       lobDir.y += lobStrength;
       lobDir.normalize();
-
-      // Store velocity
-      arrowGroup.userData.velocity = lobDir.multiplyScalar(2.5); // speed
+      arrowGroup.userData.velocity = lobDir.multiplyScalar(0.25); // Scaled for AR
       arrowGroup.userData.gravity = true;
-      // Tag arrow as 70m if spawned from 70m target
-      arrowGroup.userData.is70mArrow = (targetMesh.userData && targetMesh.userData.distance === 70);
+      arrowGroup.userData.is70mArrow = (targetMesh.userData && targetMesh.userData.distance === 7);
       enemyArrows.push(arrowGroup);
-      scene.add(arrowGroup);
+      markerRoot.add(arrowGroup);
     }
+    const enemyShotInterval = 4.5;
 
-    // Timer for 70m target shooting
-    const enemyShotInterval = 4.5; // seconds (increased from 2.5)
-
-    // Animation loop
     let time = 0;
     function animate() {
-      if (gameOver) return; // Stop animation if game over
+      if (gameOver) return;
       requestAnimationFrame(animate);
       time += 0.05;
+      arToolkitContext.update(arToolkitSource.domElement);
 
-      // Animate targets (pulsing effect + movement)
       targets.forEach(target => {
         if (!target.hit) {
-          target.scale = 1 + 0.1 * Math.sin(time);
+          target.scale = 1 + 0.01 * Math.sin(time); // Scaled pulsing
           target.mesh.scale.set(1, target.scale, 1);
         }
         if (target.label) {
           target.label.quaternion.copy(camera.quaternion);
-          // Calculate distance from player (z=0)
           const distToPlayer = Math.abs(target.mesh.position.z);
           target.label.updateDistance(distToPlayer);
         }
-        // --- Target movement/shooting logic ---
-        // Only move targets that are NOT at 70m
-        if (target.distance !== 70) {
+        if (target.distance !== 7) {
           if (score > 50) {
             targetsShouldMove = true;
           }
           if (score > 120) {
-            targetSpeed = 0.07;
+            targetSpeed = 0.007;
           }
           if (targetsShouldMove) {
             target.mesh.position.z += targetSpeed;
           }
-          // Game over if any non-70m target reaches player
-          if (target.mesh.position.z >= -5 && !target.hit && !gameOver) {
+          if (target.mesh.position.z >= -0.5 && !target.hit && !gameOver) {
             gameOver = true;
-            // Show Game Over message
             const infoDiv = document.getElementById('info');
             const gameOverMsg = document.createElement('div');
             gameOverMsg.style.fontSize = '2em';
@@ -812,9 +679,7 @@
             infoDiv.appendChild(gameOverMsg);
           }
         } else {
-          // 70m target: shoot at player every interval, with false ratio logic
           if (!target.hit && !gameOver) {
-            // Use per-target timer
             if (!target.lastEnemyShotTime) target.lastEnemyShotTime = 0;
             const now = performance.now() / 1000;
             if (now - target.lastEnemyShotTime > enemyShotInterval) {
@@ -825,111 +690,95 @@
         }
       });
 
-      // Animate crossbow (slight bob for realism)
-      crossbowGroup.position.y = 1 + 0.05 * Math.sin(time * 0.5);
+      crossbowGroup.position.y = 0.1 + 0.005 * Math.sin(time * 0.5);
 
-      // === Camera positioning ===
       if (aimMode) {
-        // Camera at stick's tip (z = +0.8 in stick local coordinates)
-        const stickTipLocal = new THREE.Vector3(0, 0.19, 0.2);
+        const stickTipLocal = new THREE.Vector3(0, 0.019, 0.02);
         stick.updateMatrixWorld();
         const stickTipWorld = stick.localToWorld(stickTipLocal.clone());
         camera.position.copy(stickTipWorld);
-        // Look forward from stick tip (crossbow's -Z axis in world)
-        const forward = new THREE.Vector3(0, 0.1, -0.8).applyQuaternion(crossbowGroup.getWorldQuaternion(new THREE.Quaternion())).normalize();
+        const forward = new THREE.Vector3(0, 0.01, -0.08).applyQuaternion(crossbowGroup.getWorldQuaternion(new THREE.Quaternion())).normalize();
         camera.lookAt(stickTipWorld.clone().add(forward));
       } else {
-        // First-person camera positioning behind and above stick tip
-        const stickTipLocal = new THREE.Vector3(0, 0.5, 1); // tip at top of stick
+        const stickTipLocal = new THREE.Vector3(0, 0.05, 0.1);
         stick.updateMatrixWorld();
         const stickTipWorld = stick.localToWorld(stickTipLocal.clone());
         const stickDir = new THREE.Vector3(0, 1, 0).applyQuaternion(stick.getWorldQuaternion(new THREE.Quaternion())).normalize();
         const up = new THREE.Vector3(0, 1, 0);
-        const cameraOffset = stickDir.clone().multiplyScalar(-0.35).add(up.clone().multiplyScalar(0.08));
+        const cameraOffset = stickDir.clone().multiplyScalar(-0.035).add(up.clone().multiplyScalar(0.008));
         camera.position.copy(stickTipWorld.clone().add(cameraOffset));
-        const forward = new THREE.Vector3(0, -0.2, -1).applyQuaternion(crossbowGroup.getWorldQuaternion(new THREE.Quaternion())).normalize();
+        const forward = new THREE.Vector3(0, -0.02, -0.1).applyQuaternion(crossbowGroup.getWorldQuaternion(new THREE.Quaternion())).normalize();
         camera.lookAt(stickTipWorld.clone().add(forward));
       }
 
-      // Show loaded arrow if not shooting and reload is done
       if (!isShooting && (!reloadingMsg || (performance.now() / 1000 - lastShotTime >= reloadTime))) {
         loadedArrow.visible = true;
-        // Restore string to original sag curve
         if (bowString.geometry.parameters.path !== stringCurveSag) {
           bowString.geometry.dispose();
-          bowString.geometry = new THREE.TubeGeometry(stringCurveSag, 2, 0.01, 8, false);
+          bowString.geometry = new THREE.TubeGeometry(stringCurveSag, 2, 0.001, 8, false);
         }
       }
 
-      // Arrow physics and orientation
       if (isShooting && arrow) {
         arrow.position.x += arrowVelocity.x * 0.05;
         arrow.position.y += arrowVelocity.y * 0.05;
         arrow.position.z += arrowVelocity.z * 0.05;
-        arrowVelocity.y -= 9.81 * 0.05;
-
+        arrowVelocity.y -= 0.981 * 0.05; // Scaled gravity
         const velocityDirection = arrowVelocity.clone().normalize();
         if (velocityDirection.lengthSq() > 0) {
           arrow.lookAt(arrow.position.clone().add(velocityDirection));
           arrow.rotateX(Math.PI / 2);
         }
-
         targets.forEach(target => {
           if (!target.hit && arrow) {
             const distance = arrow.position.distanceTo(target.mesh.position);
-            if (distance < 1.2) {
+            if (distance < 0.12) {
               target.hit = true;
               target.mesh.material.color.set(0x00FF00);
               score += 10;
               scoreDisplay.textContent = score;
               arrowsHit++;
               updateAccuracy();
-              scene.remove(arrow);
+              markerRoot.remove(arrow);
               arrow = null;
               isShooting = false;
-              scene.remove(target.mesh);
+              markerRoot.remove(target.mesh);
               const idx = targets.indexOf(target);
               if (idx !== -1) targets.splice(idx, 1);
               spawnTarget();
             }
           }
         });
-
-        if (isShooting && arrow && (arrow.position.z < -70 || arrow.position.y < 0)) {
-          scene.remove(arrow);
+        if (isShooting && arrow && (arrow.position.z < -7 || arrow.position.y < 0)) {
+          markerRoot.remove(arrow);
           arrow = null;
           isShooting = false;
         }
       }
 
-      // Animate enemy arrows
       for (let i = enemyArrows.length - 1; i >= 0; i--) {
         const eArrow = enemyArrows[i];
-        // Apply gravity if lobbing
         if (eArrow.userData.gravity) {
-          eArrow.userData.velocity.y -= 0.06; // gravity
+          eArrow.userData.velocity.y -= 0.006;
         }
         eArrow.position.add(eArrow.userData.velocity);
-        // Orient arrow in velocity direction
         const velDir = eArrow.userData.velocity.clone().normalize();
         if (velDir.lengthSq() > 0) {
           eArrow.lookAt(eArrow.position.clone().add(velDir));
           eArrow.rotateX(Math.PI / 2);
         }
-        // Check collision with player (camera)
-        if (eArrow.position.distanceTo(camera.position) <= 0.9 && !gameOver) {
+        if (eArrow.position.distanceTo(camera.position) <= 0.09 && !gameOver) {
           if (eArrow.userData.is70mArrow) {
             playerHealth -= 4;
             updateHealth();
             showHitFlash();
           }
-          scene.remove(eArrow);
+          markerRoot.remove(eArrow);
           enemyArrows.splice(i, 1);
           if (playerHealth <= 0) {
             playerHealth = 0;
             updateHealth();
             gameOver = true;
-            // Show Game Over message
             const infoDiv = document.getElementById('info');
             const gameOverMsg = document.createElement('div');
             gameOverMsg.style.fontSize = '2em';
@@ -940,14 +789,12 @@
           }
           continue;
         }
-        // Remove arrow if it goes far past player or below ground
-        if (eArrow.position.distanceTo(camera.position) > 120 || eArrow.position.y < -5) {
-          scene.remove(eArrow);
+        if (eArrow.position.distanceTo(camera.position) > 12 || eArrow.position.y < -0.5) {
+          markerRoot.remove(eArrow);
           enemyArrows.splice(i, 1);
         }
       }
 
-      // Hide reloading message when reload is done
       if (reloadingMsg) {
         const now = performance.now() / 1000;
         if (now - lastShotTime >= reloadTime) {
@@ -960,30 +807,54 @@
     }
     animate();
 
-    // Handle window resize
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+    const restartBtn = document.getElementById('restartBtn');
+    restartBtn.addEventListener('click', function () {
+      targets.forEach(t => markerRoot.remove(t.mesh));
+      targets.length = 0;
+      if (arrow) {
+        markerRoot.remove(arrow);
+        arrow = null;
+      }
+      if (enemyArrows && enemyArrows.length) {
+        enemyArrows.forEach(ea => markerRoot.remove(ea));
+        enemyArrows.length = 0;
+      }
+      score = 0;
+      scoreDisplay.textContent = score;
+      arrowsShot = 0;
+      arrowsHit = 0;
+      updateAccuracy();
+      playerHealth = 100;
+      updateHealth();
+      document.getElementById('healthBarContainer').style.display = 'block';
+      const infoDiv = document.getElementById('info');
+      const gameOverMsg = infoDiv.querySelector('div');
+      if (gameOverMsg) gameOverMsg.remove();
+      targetSpeed = 0.005;
+      targetsShouldMove = false;
+      gameOver = false;
+      crossbowGroup.position.set(0, 0.1, 0);
+      crossbowGroup.rotation.set(0, 0, 0);
+      camera.position.set(0, 0.15, 0.25);
+      camera.lookAt(0, 0.1, 0);
+      aimMode = false;
+      if (document.getElementById('aimBtn')) document.getElementById('aimBtn').style.display = 'block';
+      if (document.getElementById('backBtn')) document.getElementById('backBtn').style.display = 'none';
+      stick.geometry.dispose();
+      stick.geometry = new THREE.CylinderGeometry(0.0008, 0.0008, 0.045, 32);
+      loadedArrow.visible = true;
+      distances.forEach(() => spawnTarget());
+      animate();
     });
 
-    // --- Iframe display for mobile ---
-    function isTouchDevice() {
-      return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-    }
     if (isTouchDevice() && window.top === window.self) {
-      // Only show iframe if not already inside one
       document.body.style.overflow = "hidden";
       document.getElementById('iframeContainer').style.display = 'block';
-      // Set iframe src to this page (or adjust as needed)
       document.getElementById('gameIframe').src = window.location.href;
-      // Hide all other content
       Array.from(document.body.children).forEach(function (el) {
         if (el.id !== 'iframeContainer') el.style.display = 'none';
       });
     }
   </script>
-  <div id="hitFlash"></div>
 </body>
-
 </html>
