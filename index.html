@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AR Crossbow Shooting Simulation</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #228B22;
+    }
+
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+      font-family: Arial, sans-serif;
+      background: rgba(20, 146, 220, 0.7);
+      padding: 10px;
+      border-radius: 5px;
+      z-index: 10;
+    }
+
+    #shootBtn {
+      position: absolute;
+      bottom: 30px;
+      right: 30px;
+      z-index: 10;
+      font-size: 2em;
+      padding: 0.5em 1.2em;
+      border-radius: 0.5em;
+      border: none;
+      background: #1e90ff;
+      color: white;
+      opacity: 0.85;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      display: none;
+    }
+
+    #touchpad {
+      position: absolute;
+      bottom: 30px;
+      left: 30px;
+      z-index: 20;
+      width: 120px;
+      height: 120px;
+      display: none;
+      touch-action: none;
+      user-select: none;
+      border-radius: 50%;
+      background: rgba(30, 144, 255, 0.13);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+    }
+
+    #touchpad-inner {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 44px;
+      height: 44px;
+      margin-left: -22px;
+      margin-top: -22px;
+      background: rgba(30, 144, 255, 0.7);
+      border-radius: 50%;
+      pointer-events: none;
+      transition: background 0.1s;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+    }
+
+    #hitFlash {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(255, 0, 0, 0.25);
+      z-index: 9999;
+      pointer-events: none;
+      animation: none;
+    }
+
+    @keyframes hitFlashAnim {
+      0% { opacity: 0.7; }
+      100% { opacity: 0; }
+    }
+
+    #healthBarContainer {
+      position: absolute;
+      top: 10px;
+      right: 20px;
+      z-index: 100;
+      background: rgba(20, 146, 220, 0.7);
+      padding: 8px 14px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.13);
+      display: block;
+    }
+
+    #aimBtn {
+      position: absolute;
+      bottom: 100px;
+      right: 30px;
+      z-index: 10;
+      font-size: 1.3em;
+      padding: 0.5em 1.2em;
+      border-radius: 0.5em;
+      border: none;
+      background: #43a047;
+      color: white;
+      opacity: 0.85;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    #backBtn {
+      position: absolute;
+      bottom: 100px;
+      right: 130px;
+      z-index: 10;
+      font-size: 1.3em;
+      padding: 0.5em 1.2em;
+      border-radius: 0.5em;
+      border: none;
+      background: #b71c1c;
+      color: white;
+      opacity: 0.85;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      display: none;
+    }
+
+    #restartBtn {
+      position: absolute;
+      bottom: 30px;
+      left: 140px;
+      z-index: 10;
+      font-size: 1.3em;
+      padding: 0.5em 1.2em;
+      border-radius: 0.5em;
+      border: none;
+      background: #e67e22;
+      color: white;
+      opacity: 0.85;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    #iframeContainer {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1000;
+      background: #228B22;
+    }
+
+    #gameIframe {
+      width: 100vw;
+      height: 100vh;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <p>Co Loa Crossbow</p>
+    <p>Score: <span id="score">0</span></p>
+    <p>Accuracy: <span id="accuracy">0%</span></p>
+  </div>
+  <div id="healthBarContainer">
+    <div id="healthBarBg" style="width:120px;height:18px;background:#333;border-radius:8px;overflow:hidden;">
+      <div id="healthBar" style="height:100%;width:100%;background:#4caf50;transition:width 0.3s,background 0.3s;"></div>
+    </div>
+    <span id="healthLabel" style="margin-left:10px;vertical-align:middle;">100</span>
+  </div>
+  <button id="shootBtn">Shoot</button>
+  <div id="touchpad">
+    <div id="touchpad-inner"></div>
+  </div>
+  <button id="aimBtn">Aim</button>
+  <button id="backBtn">Back</button>
+  <div id="hitFlash"></div>
+  <div id="iframeContainer">
+    <iframe id="gameIframe" src=""></iframe>
+  </div>
+
+  <script src="https://aframe.io/releases/0.8.0/aframe.min.js" onerror="alert('Failed to load A-Frame. Check network.');"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ar.js@1.6.0/aframe/build/aframe-ar.js" onerror="alert('Failed to load AR.js. Check network.');"></script>
+  <script>
+    // Game state
+    let score = 0;
+    let arrowsShot = 0;
+    let arrowsHit = 0;
+    let playerHealth = 100;
+    let gameOver = false;
+    let isShooting = false;
+    let aimMode = false;
+    let targetsShouldMove = false;
+    let targetSpeed = 0.005;
+    let reloadTime = 1.2;
+    let lastShotTime = -Infinity;
+    let lobAngle = 0;
+    const distances = [7, 5, 6];
+    const enemyShotInterval = 4.5;
+    const targets = [];
+    const enemyArrows = [];
+
+    const scoreDisplay = document.getElementById('score');
+    const accuracyDisplay = document.getElementById('accuracy');
+    const healthBar = document.getElementById('healthBar');
+    const healthLabel = document.getElementById('healthLabel');
+    const hitFlash = document.getElementById('hitFlash');
+    const shootBtn = document.getElementById('shootBtn');
+    const touchpad = document.getElementById('touchpad');
+    const touchpadInner = document.getElementById('touchpad-inner');
+    const aimBtn = document.getElementById('aimBtn');
+    const backBtn = document.getElementById('backBtn');
+
+    function updateAccuracy() {
+      let percent = arrowsShot === 0 ? 0 : Math.round((arrowsHit / arrowsShot) * 100);
+      accuracyDisplay.textContent = percent + '%';
+    }
+
+    function updateHealth() {
+      const percent = Math.max(0, playerHealth) / 100;
+      healthBar.style.width = (percent * 100) + '%';
+      if (percent > 0.6) {
+        healthBar.style.background = '#4caf50';
+      } else if (percent > 0.3) {
+        healthBar.style.background = '#ffb300';
+      } else {
+        healthBar.style.background = '#e53935';
+      }
+      healthLabel.textContent = Math.max(0, playerHealth);
+    }
+
+    function showHitFlash() {
+      if (!hitFlash) return;
+      hitFlash.style.display = 'block';
+      hitFlash.style.animation = 'hitFlashAnim 0.35s linear';
+      setTimeout(() => {
+        hitFlash.style.display = 'none';
+        hitFlash.style.animation = 'none';
+      }, 350);
+    }
+
+    function isTouchDevice() {
+      return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    }
+
+    if (isTouchDevice()) {
+      shootBtn.style.display = 'block';
+      touchpad.style.display = 'block';
+    }
+
+    // Touchpad controls
+    if (isTouchDevice()) {
+      let padActive = false;
+      let padCenter = { x: 0, y: 0 };
+      let lastYaw = 0, lastPitch = 0;
+      const yawFactor = Math.PI / 120;
+      const pitchFactor = Math.PI / 180;
+
+      function clampPitch(pitch) {
+        return Math.max(-Math.PI / 4, Math.min(Math.PI / 4, pitch));
+      }
+
+      function updatePadInner(dx, dy) {
+        touchpadInner.style.left = `calc(50% + ${dx}px)`;
+        touchpadInner.style.top = `calc(50% + ${dy}px)`;
+      }
+
+      function resetPadInner() {
+        touchpadInner.style.left = '50%';
+        touchpadInner.style.top = '50%';
+      }
+
+      touchpad.addEventListener('touchstart', function (e) {
+        if (e.touches.length === 1) {
+          padActive = true;
+          const rect = touchpad.getBoundingClientRect();
+          padCenter.x = rect.left + rect.width / 2;
+          padCenter.y = rect.top + rect.height / 2;
+          lastYaw = crossbowEl.getAttribute('rotation').y * Math.PI / 180;
+          lastPitch = crossbowEl.getAttribute('rotation').x * Math.PI / 180;
+          resetPadInner();
+        }
+      }, { passive: false });
+
+      touchpad.addEventListener('touchmove', function (e) {
+        if (padActive && e.touches.length === 1) {
+          e.preventDefault();
+          const touch = e.touches[0];
+          const dx = touch.clientX - padCenter.x;
+          const dy = touch.clientY - padCenter.y;
+          const maxR = 50;
+          let r = Math.sqrt(dx * dx + dy * dy);
+          let ndx = dx, ndy = dy;
+          if (r > maxR) {
+            ndx = dx * maxR / r;
+            ndy = dy * maxR / r;
+            r = maxR;
+          }
+          updatePadInner(ndx, ndy);
+          crossbowEl.setAttribute('rotation', {
+            x: clampPitch(lastPitch + ndy * pitchFactor) * 180 / Math.PI,
+            y: (lastYaw - ndx * yawFactor) * 180 / Math.PI,
+            z: 0
+          });
+          lobAngle = (1 - ((touch.clientY / window.innerHeight) * 2 - 1 + 1) / 2) * 5;
+          lobAngle = Math.max(0, Math.min(5, lobAngle));
+        }
+      }, { passive: false });
+
+      touchpad.addEventListener('touchend', function () {
+        padActive = false;
+        resetPadInner();
+        lastYaw = crossbowEl.getAttribute('rotation').y * Math.PI / 180;
+        lastPitch = crossbowEl.getAttribute('rotation').x * Math.PI / 180;
+      });
+    }
+
+    // Mouse controls
+    document.addEventListener('mousemove', (event) => {
+      const mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+      const mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+      crossbowEl.setAttribute('rotation', {
+        x: (mouseY * Math.PI / 8) * 180 / Math.PI,
+        y: (-mouseX * Math.PI / 4) * 180 / Math.PI,
+        z: 0
+      });
+      lobAngle = (1 - (mouseY + 1) / 2) * 5;
+      lobAngle = Math.max(0, Math.min(5, lobAngle));
+    });
+
+    // A-Frame scene
+    const sceneEl = document.createElement('a-scene');
+    sceneEl.setAttribute('embedded', '');
+    sceneEl.setAttribute('arjs', 'sourceType: webcam; detectionMode: mono;');
+    document.body.appendChild(sceneEl);
+
+    // Marker
+    const markerEl = document.createElement('a-marker');
+    markerEl.setAttribute('preset', 'hiro');
+    markerEl.setAttribute('type', 'pattern');
+    markerEl.setAttribute('url', '/assets/patt.hiro');
+    sceneEl.appendChild(markerEl);
+
+    // Lighting
+    const ambientLightEl = document.createElement('a-light');
+    ambientLightEl.setAttribute('type', 'ambient');
+    ambientLightEl.setAttribute('color', '#404040');
+    ambientLightEl.setAttribute('intensity', '1');
+    markerEl.appendChild(ambientLightEl);
+
+    const directionalLightEl = document.createElement('a-light');
+    directionalLightEl.setAttribute('type', 'directional');
+    directionalLightEl.setAttribute('color', '#ffffff');
+    directionalLightEl.setAttribute('intensity', '1');
+    directionalLightEl.setAttribute('position', '5 20 7.5');
+    markerEl.appendChild(directionalLightEl);
+
+    // Crossbow
+    const crossbowEl = document.createElement('a-entity');
+    crossbowEl.setAttribute('position', '0 0 0.25');
+    markerEl.appendChild(crossbowEl);
+
+    const bodyEl = document.createElement('a-box');
+    bodyEl.setAttribute('position', '0 0 0.02');
+    bodyEl.setAttribute('width', '0.02');
+    bodyEl.setAttribute('height', '0.05');
+    bodyEl.setAttribute('depth', '0.25');
+    bodyEl.setAttribute('src', 'https://threejs.org/examples/textures/hardwood2_diffuse.jpg');
+    bodyEl.setAttribute('shader', 'standard');
+    crossbowEl.appendChild(bodyEl);
+
+    const stickEl = document.createElement('a-cylinder');
+    stickEl.setAttribute('position', '-0.006 0.032 0.13');
+    stickEl.setAttribute('radius', '0.0008');
+    stickEl.setAttribute('height', '0.045');
+    stickEl.setAttribute('color', '#ff0000');
+    stickEl.setAttribute('shader', 'standard');
+    crossbowEl.appendChild(stickEl);
+
+    const gripEl = document.createElement('a-cylinder');
+    gripEl.setAttribute('position', '0 -0.02 0.03');
+    gripEl.setAttribute('radius', '0.01');
+    gripEl.setAttribute('height', '0.04');
+    gripEl.setAttribute('rotation', '90 0 0');
+    gripEl.setAttribute('src', 'https://threejs.org/examples/textures/hardwood2_diffuse.jpg');
+    gripEl.setAttribute('shader', 'standard');
+    crossbowEl.appendChild(gripEl);
+
+    const loadedArrowEl = document.createElement('a-entity');
+    loadedArrowEl.setAttribute('position', '0 0.03 0.015');
+    loadedArrowEl.setAttribute('rotation', '90 0 0');
+    crossbowEl.appendChild(loadedArrowEl);
+
+    const loadedShaftEl = document.createElement('a-cylinder');
+    loadedShaftEl.setAttribute('radius', '0.003');
+    loadedShaftEl.setAttribute('height', '0.2');
+    loadedShaftEl.setAttribute('color', '#FFD700');
+    loadedShaftEl.setAttribute('shader', 'standard');
+    loadedArrowEl.appendChild(loadedShaftEl);
+
+    const loadedTipEl = document.createElement('a-cone');
+    loadedTipEl.setAttribute('position', '0 -0.09 -0.002');
+    loadedTipEl.setAttribute('radius-bottom', '0.005');
+    loadedTipEl.setAttribute('height', '0.012');
+    loadedTipEl.setAttribute('color', '#888888');
+    loadedTipEl.setAttribute('shader', 'standard');
+    loadedArrowEl.appendChild(loadedTipEl);
+
+    // Targets
+    function createBullseyeTexture() {
+      const size = 256;
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, size / 2, 0, 2 * Math.PI); ctx.fill();
+      ctx.fillStyle = '#ff2222';
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, size / 2 * 0.8, 0, 2 * Math.PI); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, size / 2 * 0.55, 0, 2 * Math.PI); ctx.fill();
+      ctx.fillStyle = '#2222ff';
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, size / 2 * 0.35, 0, 2 * Math.PI); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, size / 2 * 0.18, 0, 2 * Math.PI); ctx.fill();
+      ctx.fillStyle = '#ff2222';
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, size / 2 * 0.09, 0, 2 * Math.PI); ctx.fill();
+      return canvas.toDataURL();
+    }
+
+    function createDistanceLabelTexture(distance) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 128;
+      canvas.height = 32;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.font = 'bold 33px Arial';
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${distance}m`, canvas.width / 2, canvas.height / 2);
+      return canvas.toDataURL();
+    }
+
+    function spawnTarget() {
+      const dist = distances[Math.floor(Math.random() * distances.length)];
+      const targetEl = document.createElement('a-cylinder');
+      targetEl.setAttribute('position', `${Math.random() * 1.2 - 0.5} 0.1 ${-dist}`);
+      targetEl.setAttribute('rotation', '90 0 0');
+      targetEl.setAttribute('radius', '0.15');
+      targetEl.setAttribute('height', '0.08');
+      targetEl.setAttribute('src', createBullseyeTexture());
+      targetEl.setAttribute('shader', 'standard');
+      targetEl.object3D.userData = { distance: dist, hit: false, scale: 1 };
+      markerEl.appendChild(targetEl);
+
+      const labelEl = document.createElement('a-plane');
+      labelEl.setAttribute('position', '0 -0.3 -0.2');
+      labelEl.setAttribute('width', '0.3');
+      labelEl.setAttribute('height', '0.1');
+      labelEl.setAttribute('material', `src: ${createDistanceLabelTexture(dist)}; transparent: true`);
+      targetEl.appendChild(labelEl);
+
+      targets.push({ el: targetEl, distance: dist, hit: false, scale: 1, label: labelEl });
+    }
+
+    distances.forEach(() => spawnTarget());
+
+    // Shooting
+    let arrowEl = null;
+    let arrowVelocity = new THREE.Vector3();
+
+    function shootArrow() {
+      const now = performance.now() / 1000;
+      if (!isShooting && now - lastShotTime >= reloadTime && !gameOver) {
+        isShooting = true;
+        lastShotTime = now;
+        loadedArrowEl.setAttribute('visible', 'false');
+        arrowsShot++;
+        updateAccuracy();
+
+        arrowEl = document.createElement('a-entity');
+        const shaftEl = document.createElement('a-cylinder');
+        shaftEl.setAttribute('radius', '0.005');
+        shaftEl.setAttribute('height', '0.08');
+        shaftEl.setAttribute('color', '#FFD700');
+        shaftEl.setAttribute('shader', 'standard');
+        arrowEl.appendChild(shaftEl);
+
+        const tipEl = document.createElement('a-cone');
+        tipEl.setAttribute('position', '0 0.08 0');
+        tipEl.setAttribute('radius-bottom', '0.01');
+        tipEl.setAttribute('height', '0.08');
+        tipEl.setAttribute('color', '#888888');
+        tipEl.setAttribute('shader', 'standard');
+        arrowEl.appendChild(tipEl);
+
+        const crossbowPos = crossbowEl.object3D.getWorldPosition(new THREE.Vector3());
+        const crossbowQuat = crossbowEl.object3D.getWorldQuaternion(new THREE.Quaternion());
+        arrowEl.setAttribute('position', crossbowPos);
+        arrowEl.object3D.quaternion.copy(crossbowQuat);
+        markerEl.appendChild(arrowEl);
+
+        const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(crossbowQuat);
+        const lobRad = lobAngle * Math.PI / 180;
+        direction.applyAxisAngle(new THREE.Vector3(1, 0, 0), lobRad).normalize();
+        const baseSpeed = 5.5;
+        arrowVelocity.set(direction.x * baseSpeed, direction.y * baseSpeed, direction.z * baseSpeed);
+      }
+    }
+
+    document.addEventListener('click', shootArrow);
+    shootBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      shootArrow();
+    });
+    shootBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      shootArrow();
+    });
+
+    // Aim mode
+    function aim() {
+      aimMode = true;
+      aimBtn.style.display = 'none';
+      backBtn.style.display = 'block';
+      stickEl.setAttribute('radius', '0.0001');
+      stickEl.setAttribute('height', '0.0384');
+    }
+
+    function exitAim() {
+      aimMode = false;
+      aimBtn.style.display = 'block';
+      backBtn.style.display = 'none';
+      stickEl.setAttribute('radius', '0.0008');
+      stickEl.setAttribute('height', '0.045');
+    }
+
+    aimBtn.addEventListener('click', aim);
+    backBtn.addEventListener('click', exitAim);
+
+    // Enemy arrows
+    function spawnEnemyArrow(targetEl, scoreForFalseRatio) {
+      const arrowGroupEl = document.createElement('a-entity');
+      const shaftEl = document.createElement('a-cylinder');
+      shaftEl.setAttribute('radius', '0.005');
+      shaftEl.setAttribute('height', '0.08');
+      shaftEl.setAttribute('color', '#888888');
+      shaftEl.setAttribute('shader', 'standard');
+      arrowGroupEl.appendChild(shaftEl);
+
+      const tipEl = document.createElement('a-cone');
+      tipEl.setAttribute('position', '0 0.055 0');
+      tipEl.setAttribute('radius-bottom', '0.01');
+      tipEl.setAttribute('height', '0.03');
+      tipEl.setAttribute('color', '#ff0000');
+      tipEl.setAttribute('shader', 'standard');
+      arrowGroupEl.appendChild(tipEl);
+
+      const targetPos = targetEl.object3D.getWorldPosition(new THREE.Vector3());
+      arrowGroupEl.setAttribute('position', targetPos);
+      const playerPos = new THREE.Vector3(0, 0.15, 0.25);
+      let falseRatio = scoreForFalseRatio < 150 ? 0.3 : 0.2;
+      let miss = Math.random() < falseRatio;
+      let targetVec = playerPos.clone();
+      if (miss) {
+        targetVec.x += (Math.random() - 0.5) * 0.6;
+        targetVec.y += (Math.random() - 0.5) * 0.6;
+      }
+      const dir = targetVec.sub(targetPos).normalize();
+      const lobStrength = 0.042;
+      const lobDir = dir.clone();
+      lobDir.y += lobStrength;
+      lobDir.normalize();
+      arrowGroupEl.object3D.userData = {
+        velocity: lobDir.multiplyScalar(0.25),
+        gravity: true,
+        is70mArrow: targetEl.object3D.userData.distance === 7
+      };
+      enemyArrows.push(arrowGroupEl);
+      markerEl.appendChild(arrowGroupEl);
+    }
+
+    // Restart button
+    let restartBtn = document.getElementById('restartBtn');
+    if (!restartBtn) {
+      restartBtn = document.createElement('button');
+      restartBtn.id = 'restartBtn';
+      restartBtn.textContent = 'Restart';
+      restartBtn.style.position = 'absolute';
+      restartBtn.style.bottom = '30px';
+      restartBtn.style.left = isTouchDevice() ? '140px' : '30px';
+      restartBtn.style.zIndex = '10';
+      restartBtn.style.fontSize = '1.3em';
+      restartBtn.style.padding = '0.5em 1.2em';
+      restartBtn.style.borderRadius = '0.5em';
+      restartBtn.style.border = 'none';
+      restartBtn.style.background = '#e67e22';
+      restartBtn.style.color = 'white';
+      restartBtn.style.opacity = '0.85';
+      restartBtn.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+      document.body.appendChild(restartBtn);
+
+      restartBtn.addEventListener('click', function () {
+        targets.forEach(t => t.el.parentNode.removeChild(t.el));
+        targets.length = 0;
+        if (arrowEl) {
+          arrowEl.parentNode.removeChild(arrowEl);
+          arrowEl = null;
+        }
+        enemyArrows.forEach(ea => ea.parentNode.removeChild(ea));
+        enemyArrows.length = 0;
+        score = 0;
+        scoreDisplay.textContent = score;
+        arrowsShot = 0;
+        arrowsHit = 0;
+        updateAccuracy();
+        playerHealth = 100;
+        updateHealth();
+        document.getElementById('healthBarContainer').style.display = 'block';
+        const infoDiv = document.getElementById('info');
+        const gameOverMsg = infoDiv.querySelector('div');
+        if (gameOverMsg) gameOverMsg.remove();
+        targetSpeed = 0.005;
+        targetsShouldMove = false;
+        gameOver = false;
+        crossbowEl.setAttribute('position', '0 0 0.25');
+        crossbowEl.setAttribute('rotation', '0 0 0');
+        aimMode = false;
+        aimBtn.style.display = 'block';
+        backBtn.style.display = 'none';
+        stickEl.setAttribute('radius', '0.0008');
+        stickEl.setAttribute('height', '0.045');
+        loadedArrowEl.setAttribute('visible', 'true');
+        distances.forEach(() => spawnTarget());
+      });
+    }
+
+    // Animation loop
+    let time = 0;
+    sceneEl.addEventListener('loaded', () => {
+      sceneEl.addEventListener('renderstart', () => {
+        const animate = () => {
+          if (gameOver) return;
+          time += 0.05;
+
+          targets.forEach(target => {
+            if (!target.hit) {
+              target.scale = 1 + 0.01 * Math.sin(time);
+              target.el.setAttribute('scale', `${1} ${target.scale} ${1}`);
+            }
+            if (target.distance !== 7) {
+              if (score > 50) targetsShouldMove = true;
+              if (score > 120) targetSpeed = 0.007;
+              if (targetsShouldMove) {
+                const pos = target.el.getAttribute('position');
+                pos.z += targetSpeed;
+                target.el.setAttribute('position', pos);
+              }
+              // Move the declaration of pos here for the next check
+              const pos = target.el.getAttribute('position');
+              if (pos.z >= -0.5 && !target.hit && !gameOver) {
+                gameOver = true;
+                const infoDiv = document.getElementById('info');
+                const gameOverMsg = document.createElement('div');
+                gameOverMsg.style.fontSize = '2em';
+                gameOverMsg.style.color = 'yellow';
+                gameOverMsg.style.marginTop = '10px';
+                gameOverMsg.textContent = 'GAME OVER';
+                infoDiv.appendChild(gameOverMsg);
+              }
+            } else {
+              if (!target.hit && !gameOver) {
+                if (!target.lastEnemyShotTime) target.lastEnemyShotTime = 0;
+                const now = performance.now() / 1000;
+                if (now - target.lastEnemyShotTime > enemyShotInterval) {
+                  spawnEnemyArrow(target.el, score);
+                  target.lastEnemyShotTime = now;
+                }
+              }
+            }
+          });
+
+          crossbowEl.setAttribute('position', `0 ${0 + 0.005 * Math.sin(time * 0.5)} 0.25`);
+
+          if (aimMode) {
+            const stickPos = stickEl.object3D.getWorldPosition(new THREE.Vector3());
+            const forward = new THREE.Vector3(0, 0.01, -0.08).applyQuaternion(crossbowEl.object3D.getWorldQuaternion(new THREE.Quaternion())).normalize();
+            sceneEl.camera.position.copy(stickPos);
+            sceneEl.camera.lookAt(stickPos.clone().add(forward));
+          }
+
+          if (!isShooting) {
+            loadedArrowEl.setAttribute('visible', 'true');
+          }
+
+          if (isShooting && arrowEl) {
+            const pos = arrowEl.getAttribute('position');
+            pos.x += arrowVelocity.x * 0.05;
+            pos.y += arrowVelocity.y * 0.05;
+            pos.z += arrowVelocity.z * 0.05;
+            arrowVelocity.y -= 0.981 * 0.05;
+            arrowEl.setAttribute('position', pos);
+            const velocityDirection = arrowVelocity.clone().normalize();
+            if (velocityDirection.lengthSq() > 0) {
+              arrowEl.object3D.lookAt(arrowEl.object3D.position.clone().add(velocityDirection));
+              arrowEl.setAttribute('rotation', {
+                x: arrowEl.getAttribute('rotation').x + 90,
+                y: arrowEl.getAttribute('rotation').y,
+                z: arrowEl.getAttribute('rotation').z
+              });
+            }
+            targets.forEach(target => {
+              if (!target.hit && arrowEl) {
+                const targetPos = target.el.getAttribute('position');
+                const distance = Math.sqrt(
+                  Math.pow(pos.x - targetPos.x, 2) +
+                  Math.pow(pos.y - targetPos.y, 2) +
+                  Math.pow(pos.z - targetPos.z, 2)
+                );
+                if (distance < 0.12) {
+                  target.hit = true;
+                  target.el.setAttribute('color', '#00FF00');
+                  score += 10;
+                  scoreDisplay.textContent = score;
+                  arrowsHit++;
+                  updateAccuracy();
+                  arrowEl.parentNode.removeChild(arrowEl);
+                  arrowEl = null;
+                  isShooting = false;
+                  target.el.parentNode.removeChild(target.el);
+                  const idx = targets.indexOf(target);
+                  if (idx !== -1) targets.splice(idx, 1);
+                  spawnTarget();
+                }
+              }
+            });
+            if (isShooting && arrowEl && (pos.z < -7 || pos.y < 0)) {
+              arrowEl.parentNode.removeChild(arrowEl);
+              arrowEl = null;
+              isShooting = false;
+            }
+          }
+
+          for (let i = enemyArrows.length - 1; i >= 0; i--) {
+            const eArrow = enemyArrows[i];
+            if (eArrow.object3D.userData.gravity) {
+              eArrow.object3D.userData.velocity.y -= 0.006;
+            }
+            const pos = eArrow.getAttribute('position');
+            pos.add(eArrow.object3D.userData.velocity);
+            eArrow.setAttribute('position', pos);
+            const velDir = eArrow.object3D.userData.velocity.clone().normalize();
+            if (velDir.lengthSq() > 0) {
+              eArrow.object3D.lookAt(eArrow.object3D.position.clone().add(velDir));
+              eArrow.setAttribute('rotation', {
+                x: eArrow.getAttribute('rotation').x + 90,
+                y: eArrow.getAttribute('rotation').y,
+                z: eArrow.getAttribute('rotation').z
+              });
+            }
+            const playerPos = new THREE.Vector3(0, 0.15, 0.25);
+            const distanceToPlayer = Math.sqrt(
+              Math.pow(pos.x - playerPos.x, 2) +
+              Math.pow(pos.y - playerPos.y, 2) +
+              Math.pow(pos.z - playerPos.z, 2)
+            );
+            if (distanceToPlayer <= 0.09 && !gameOver) {
+              if (eArrow.object3D.userData.is70mArrow) {
+                playerHealth -= 4;
+                updateHealth();
+                showHitFlash();
+              }
+              eArrow.parentNode.removeChild(eArrow);
+              enemyArrows.splice(i, 1);
+              if (playerHealth <= 0) {
+                playerHealth = 0;
+                updateHealth();
+                gameOver = true;
+                const infoDiv = document.getElementById('info');
+                const gameOverMsg = document.createElement('div');
+                gameOverMsg.style.fontSize = '2em';
+                gameOverMsg.style.color = 'red';
+                gameOverMsg.style.marginTop = '10px';
+                gameOverMsg.textContent = 'GAME OVER';
+                infoDiv.appendChild(gameOverMsg);
+              }
+              continue;
+            }
+            if (distanceToPlayer > 12 || pos.y < -0.5) {
+              eArrow.parentNode.removeChild(eArrow);
+              enemyArrows.splice(i, 1);
+            }
+          }
+
+          requestAnimationFrame(animate);
+        };
+        animate();
+      });
+    });
+
+    if (isTouchDevice() && window.top === window.self) {
+      document.body.style.overflow = "hidden";
+      document.getElementById('iframeContainer').style.display = 'block';
+      document.getElementById('gameIframe').src = window.location.href;
+      Array.from(document.body.children).forEach(function (el) {
+        if (el.id !== 'iframeContainer') el.style.display = 'none';
+      });
+    }
+  </script>
+</body>
+</html>
