@@ -221,7 +221,7 @@
     // Initialize AR
     Promise.all([
       loadFile('camera_para.dat'),
-      loadFile('hiro.patt'),
+      loadFile('hiro2.patt'),
     ])
     .then(() => {
       arToolkitSource = new THREEx.ArToolkitSource({
@@ -248,7 +248,7 @@
 
       arMarkerControls = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
         type: 'pattern',
-        patternUrl: 'hiro.patt',
+        patternUrl: 'hiro2.patt',
       });
       logDebug('Marker controls initialized');
     })
