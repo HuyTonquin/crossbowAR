@@ -218,8 +218,10 @@
 
     // WebXR session
     let xrSession = null;
-    let xrReferenceSpace = null;
+    let xrRefSpace = null;
+    let xrViewerSpace = null;
     let xrHitTestSource = null;
+    let scenePlaced = false;
     let sceneRoot = new THREE.Group();
     scene.add(sceneRoot);
     logDebug('Scene root added');
@@ -231,7 +233,8 @@
       startARButton.style.display = 'none';
       logDebug('WebXR not supported on this browser');
     }
-    startARButton.addEventListener('click', async () => {
+
+    async function startAR() {
       if (!navigator.xr) {
         logDebug('WebXR not supported');
         alert('WebXR AR not supported on this browser/device.');
@@ -242,16 +245,50 @@
           requiredFeatures: ['hit-test', 'local-floor']
         });
         renderer.xr.setSession(xrSession);
-        xrReferenceSpace = await xrSession.requestReferenceSpace('local-floor');
-        xrHitTestSource = await xrSession.requestHitTestSource({ space: xrReferenceSpace });
+        xrRefSpace = await xrSession.requestReferenceSpace('local-floor');
+        xrViewerSpace = await xrSession.requestReferenceSpace('viewer');
+        xrHitTestSource = await xrSession.requestHitTestSource({ space: xrViewerSpace });
         startARButton.style.display = 'none';
         reticle.style.display = 'block';
+        sceneRoot.visible = false;
+        scenePlaced = false;
         logDebug('WebXR session started');
+        renderer.setAnimationLoop(animate);
+
+        xrSession.addEventListener('end', () => {
+          startARButton.style.display = 'block';
+          reticle.style.display = 'none';
+          xrHitTestSource = null;
+          xrViewerSpace = null;
+          xrRefSpace = null;
+          xrSession = null;
+          scenePlaced = false;
+          sceneRoot.visible = true;
+          logDebug('WebXR session ended');
+        });
+
+        renderer.domElement.addEventListener('click', onARSelect);
       } catch (error) {
         logDebug(`WebXR session failed: ${error.message}`);
         alert('Failed to start AR session: ' + error.message);
       }
-    });
+    }
+
+    function onARSelect() {
+      if (reticle.style.display === 'block' && reticle._lastMatrix) {
+        // Place the sceneRoot at the reticle position
+        sceneRoot.matrix.fromArray(reticle._lastMatrix);
+        sceneRoot.matrix.decompose(sceneRoot.position, sceneRoot.quaternion, sceneRoot.scale);
+        sceneRoot.visible = true;
+        scenePlaced = true;
+        reticle.style.display = 'none';
+        logDebug('Scene placed on surface');
+        // Remove this event listener after placement
+        renderer.domElement.removeEventListener('click', onARSelect);
+      }
+    }
+
+    startARButton.addEventListener('click', startAR);
 
     // Resize handling
     function onResize() {
@@ -518,7 +555,7 @@
     let lastShotTime = -Infinity;
     let reloadingMsg = null;
     let gameOver = false;
-    let scenePlaced = false;
+   
 
     // Controls
     document.addEventListener('mousemove', (event) => {
@@ -743,22 +780,24 @@
         const hitTestResults = frame.getHitTestResults(xrHitTestSource);
         if (hitTestResults.length > 0) {
           const hit = hitTestResults[0];
-          const pose = hit.getPose(xrReferenceSpace);
+          const pose = hit.getPose(xrRefSpace);
           if (pose) {
-            const matrix = new THREE.Matrix4().fromArray(pose.transform.matrix);
-            sceneRoot.matrix.copy(matrix);
-            sceneRoot.matrix.decompose(sceneRoot.position, sceneRoot.quaternion, sceneRoot.scale);
-            sceneRoot.visible = true;
-            if (xrSession) {
-              xrSession.addEventListener('select', () => {
-                scenePlaced = true;
-                reticle.style.display = 'none';
-                logDebug('Scene placed on surface');
-              });
-            }
-            logDebug('Hit-test surface detected');
+            // Show reticle at hit-test position
+            reticle.style.display = 'block';
+            // Save matrix for placement
+            reticle._lastMatrix = pose.transform.matrix;
+            // Optionally, you can visualize the reticle in 3D here if desired
           }
+        } else {
+          reticle.style.display = 'none';
+          reticle._lastMatrix = null;
         }
+      }
+      // Only render sceneRoot if placed or not in AR
+      if (!xrSession || scenePlaced) {
+        sceneRoot.visible = true;
+      } else {
+        sceneRoot.visible = false;
       }
 
       targets.forEach(target => {
