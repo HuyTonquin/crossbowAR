@@ -381,10 +381,7 @@
                 crossbowGroup.rotation.y = euler.y;
                 crossbowGroup.rotation.z = 0;
                 if (
-                    crossbowGroup.position.y !== 0 && // avoid division by zero
-                    (
-                        (crossbowGroup.position.y /target.position.y) > 0.5
-                    )
+                    crossbowGroup.position.y !== 0 && ((crossbowGroup.position.y /target.position.y) > 0.5)
                 ){
                     const fixedOffset = new THREE.Vector3(0, -0.03, -0.3);
                     fixedOffset.applyQuaternion(camera.quaternion);
