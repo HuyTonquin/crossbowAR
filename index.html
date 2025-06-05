@@ -210,7 +210,10 @@
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
-    document.body.appendChild(renderer.domElement);
+    // Only append renderer.domElement if not already present
+    if (!renderer.domElement.parentElement) {
+      document.body.appendChild(renderer.domElement);
+    }
     logDebug('Three.js renderer initialized with WebXR');
 
     // WebXR session
@@ -603,14 +606,29 @@
       }, { passive: false });
     }
 
+    // Fix: bowString.geometry.parameters.path !== stringCurveSag always false
+    // Use a flag to track string state
+    let isStringSag = true;
+
+    function setBowStringSag(sag) {
+      if (isStringSag !== sag) {
+        bowString.geometry.dispose();
+        if (sag) {
+          bowString.geometry = new THREE.TubeGeometry(stringCurveSag, 2, 0.001, 8, false);
+        } else {
+          bowString.geometry = new THREE.TubeGeometry(stringCurveStraight, 2, 0.001, 8, false);
+        }
+        isStringSag = sag;
+      }
+    }
+
     function shootArrow() {
       const now = performance.now() / 1000;
       if (!isShooting && now - lastShotTime >= reloadTime && !gameOver) {
         isShooting = true;
         lastShotTime = now;
         loadedArrow.visible = false;
-        bowString.geometry.dispose();
-        bowString.geometry = new THREE.TubeGeometry(stringCurveStraight, 2, 0.001, 8, false);
+        setBowStringSag(false);
         arrowsShot++;
         updateAccuracy();
         arrow = new THREE.Group();
@@ -715,8 +733,9 @@
 
     let time = 0;
     function animate(timestamp, frame) {
-      if (gameOver) return;
+      // Always call requestAnimationFrame to keep UI responsive
       requestAnimationFrame(animate);
+      if (gameOver) return;
       time += 0.05;
 
       // WebXR hit-test
@@ -808,10 +827,7 @@
 
       if (!isShooting && (!reloadingMsg || (performance.now() / 1000 - lastShotTime >= reloadTime))) {
         loadedArrow.visible = true;
-        if (bowString.geometry.parameters.path !== stringCurveSag) {
-          bowString.geometry.dispose();
-          bowString.geometry = new THREE.TubeGeometry(stringCurveSag, 2, 0.001, 8, false);
-        }
+        setBowStringSag(true);
       }
 
       if (isShooting && arrow) {
@@ -895,10 +911,13 @@
         }
       }
 
+      // Fix: Remove reloadingMsg safely
       if (reloadingMsg) {
         const now = performance.now() / 1000;
         if (now - lastShotTime >= reloadTime) {
-          reloadingMsg.remove();
+          if (reloadingMsg.parentElement) {
+            reloadingMsg.remove();
+          }
           reloadingMsg = null;
           logDebug('Reload complete');
         }
