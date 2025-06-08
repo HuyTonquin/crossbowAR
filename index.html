@@ -95,7 +95,7 @@
         let xrRefSpace = null;
         let xrViewerSpace = null;
         let xrHitTestSource = null;
-        let renderer, scene, camera, cube, reticle;
+        let renderer, scene, camera, reticle;
         let crossbowParent, crossbowGroup, loadedArrow;
         let target = null;
         let score = 0;
@@ -109,7 +109,7 @@
         let targetArrowVelocity = new THREE.Vector3();
         let targetLastShotTime = -Infinity;
         const targetReloadTime = 4;
-        const targetArrowDamage = 2;
+        const targetArrowDamage = 50;
         let healthFlashTimeout = null;
         let crosshair = null;
 
@@ -297,7 +297,7 @@
         function enableShooting() {
             const shootBtn = document.getElementById('shoot-btn');
             shootBtn.style.display = 'block';
-            shootBtn.removeEventListener('click', shootArrow); // Prevent duplicate listeners
+            shootBtn.removeEventListener('click', shootArrow);
             shootBtn.addEventListener('click', shootArrow);
         }
 
@@ -377,7 +377,6 @@
         let touchStartY = null;
         let lastTouchY = null;
 
-        // Fix typo: function setup swipeControls() -> function setupSwipeControls()
         function setupSwipeControls() {
             if (!renderer || !renderer.domElement) return;
             renderer.domElement.addEventListener('touchstart', (e) => {
@@ -540,10 +539,12 @@
         }
 
         function showRestartButton() {
+            console.log('Showing restart button');
             document.getElementById('restart-btn').style.display = 'block';
         }
 
         function hideRestartButton() {
+            console.log('Hiding restart button');
             document.getElementById('restart-btn').style.display = 'none';
         }
 
@@ -551,14 +552,25 @@
             console.log('Resetting game');
             // End current XR session if active
             if (xrSession) {
-                await xrSession.end();
+                try {
+                    await xrSession.end();
+                    console.log('XR session ended in resetGame');
+                } catch (e) {
+                    console.error('Error ending XR session:', e);
+                }
                 xrSession = null;
+                xrRefSpace = null;
+                xrViewerSpace = null;
+                xrHitTestSource = null;
             }
             // Clear animation loop
-            renderer.setAnimationLoop(null);
+            if (renderer) {
+                renderer.setAnimationLoop(null);
+            }
             // Remove renderer DOM element
             if (renderer && renderer.domElement && renderer.domElement.parentNode) {
                 renderer.domElement.parentNode.removeChild(renderer.domElement);
+                console.log('Renderer DOM element removed');
             }
             // Reset game variables
             playerHealth = 100;
@@ -601,14 +613,17 @@
             if (crosshair) {
                 crosshair.visible = false;
             }
-            // Clear existing scene and renderer
+            // Dispose of renderer and clear scene
+            if (renderer) {
+                renderer.dispose();
+                renderer = null;
+            }
             if (scene) {
                 while (scene.children.length > 0) {
                     scene.remove(scene.children[0]);
                 }
+                scene = null;
             }
-            renderer = null;
-            scene = null;
             camera = null;
             crossbowParent = null;
             crossbowGroup = null;
@@ -621,13 +636,16 @@
                 console.error('Failed to reinitialize scene');
                 document.getElementById('unsupported').textContent = 'Failed to reinitialize scene. Please reload the page.';
                 document.getElementById('unsupported').style.display = 'block';
+                return;
             }
+            console.log('Game reset complete, ready to enter AR');
         }
 
         document.addEventListener('DOMContentLoaded', () => {
             console.log('Adding restart button event listener');
             const restartBtn = document.getElementById('restart-btn');
-            restartBtn.removeEventListener('click', resetGame); // Prevent duplicate listeners
+            // Remove any existing listeners to prevent duplicates
+            restartBtn.removeEventListener('click', resetGame);
             restartBtn.addEventListener('click', async () => {
                 console.log('Restart button clicked');
                 await resetGame();
