@@ -95,8 +95,13 @@
         let xrRefSpace = null;
         let xrViewerSpace = null;
         let xrHitTestSource = null;
-        let renderer, scene, camera, reticle;
-        let crossbowParent, crossbowGroup, loadedArrow;
+        let renderer = null;
+        let scene = null;
+        let camera = null;
+        let reticle = null;
+        let crossbowParent = null;
+        let crossbowGroup = null;
+        let loadedArrow = null;
         let target = null;
         let score = 0;
         let arrow = null;
@@ -297,6 +302,7 @@
         function enableShooting() {
             const shootBtn = document.getElementById('shoot-btn');
             shootBtn.style.display = 'block';
+            shootBtn.disabled = false;
             shootBtn.removeEventListener('click', shootArrow);
             shootBtn.addEventListener('click', shootArrow);
         }
@@ -304,6 +310,7 @@
         function disableShooting() {
             const shootBtn = document.getElementById('shoot-btn');
             shootBtn.style.display = 'none';
+            shootBtn.disabled = true;
             shootBtn.removeEventListener('click', shootArrow);
         }
 
@@ -329,20 +336,8 @@
                 document.getElementById('enter-ar').style.display = 'none';
                 document.getElementById('unsupported').style.display = 'none';
                 renderer.setAnimationLoop(renderAR);
-                xrSession.addEventListener('end', () => {
-                    console.log('AR session ended');
-                    document.getElementById('enter-ar').style.display = 'block';
-                    renderer.setAnimationLoop(null);
-                    if (renderer.domElement.parentNode) {
-                        renderer.domElement.parentNode.removeChild(renderer.domElement);
-                    }
-                    xrHitTestSource = null;
-                    xrViewerSpace = null;
-                    xrRefSpace = null;
-                    xrSession = null;
-                    disableShooting();
-                    showRestartButton();
-                });
+                xrSession.addEventListener('end', onSessionEnd);
+                renderer.domElement.removeEventListener('click', onPlaceTarget);
                 renderer.domElement.addEventListener('click', onPlaceTarget);
                 return true;
             } catch (e) {
@@ -352,6 +347,21 @@
                 document.getElementById('enter-ar').style.display = 'block';
                 return false;
             }
+        }
+
+        function onSessionEnd() {
+            console.log('AR session ended');
+            document.getElementById('enter-ar').style.display = 'block';
+            renderer.setAnimationLoop(null);
+            if (renderer.domElement.parentNode) {
+                renderer.domElement.parentNode.removeChild(renderer.domElement);
+            }
+            xrHitTestSource = null;
+            xrViewerSpace = null;
+            xrRefSpace = null;
+            xrSession = null;
+            disableShooting();
+            showRestartButton();
         }
 
         function onPlaceTarget() {
@@ -556,14 +566,14 @@
             console.log('Showing restart button');
             const restartBtn = document.getElementById('restart-btn');
             restartBtn.style.display = 'block';
-            restartBtn.disabled = false; // Ensure button is clickable
+            restartBtn.disabled = false;
         }
 
         function hideRestartButton() {
             console.log('Hiding restart button');
             const restartBtn = document.getElementById('restart-btn');
             restartBtn.style.display = 'none';
-            restartBtn.disabled = true; // Disable when hidden
+            restartBtn.disabled = true;
         }
 
         async function resetGame() {
@@ -608,6 +618,7 @@
             healthboard.style.display = 'none';
             document.getElementById('scoreboard').style.display = 'none';
             document.getElementById('enter-ar').style.display = 'block';
+            document.getElementById('enter-ar').disabled = false;
             document.getElementById('unsupported').style.display = 'none';
             hideRestartButton();
             disableShooting();
@@ -665,6 +676,7 @@
                 return;
             }
             // Reattach event listeners
+            setupEnterARButton();
             setupRestartButton();
             console.log('Game reset complete, ready to enter AR');
         }
@@ -672,26 +684,22 @@
         function setupRestartButton() {
             console.log('Setting up restart button');
             const restartBtn = document.getElementById('restart-btn');
-            restartBtn.removeEventListener('click', resetGame);
-            restartBtn.addEventListener('click', async () => {
-                console.log('Restart button clicked');
-                await resetGame();
-            });
+            restartBtn.removeEventListener('click', handleRestartClick);
+            restartBtn.addEventListener('click', handleRestartClick);
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('DOM loaded, initializing restart button');
-            setupRestartButton();
-            if (navigator.xr) {
-                const enterARBtn = document.getElementById('enter-ar');
-                enterARBtn.removeEventListener('click', startARSession);
-                enterARBtn.addEventListener('click', startARSession);
-            } else {
-                console.error('WebXR not supported on initial load');
-                document.getElementById('unsupported').style.display = 'block';
-                document.getElementById('enter-ar').style.display = 'none';
-            }
-        });
+        async function handleRestartClick() {
+            console.log('Restart button clicked');
+            await resetGame();
+        }
+
+        function setupEnterARButton() {
+            console.log('Setting up Enter AR button');
+            const enterARBtn = document.getElementById('enter-ar');
+            enterARBtn.removeEventListener('click', startARSession);
+            enterARBtn.addEventListener('click', startARSession);
+            enterARBtn.disabled = false;
+        }
 
         async function startARSession() {
             console.log('Enter AR button clicked');
@@ -718,6 +726,19 @@
                 document.getElementById('unsupported').style.display = 'block';
             }
         }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM loaded, initializing buttons');
+            setupRestartButton();
+            if (navigator.xr) {
+                setupEnterARButton();
+            } else {
+                console.error('WebXR not supported on initial load');
+                document.getElementById('unsupported').style.display = 'block';
+                document.getElementById('enter-ar').style.display = 'none';
+                document.getElementById('enter-ar').disabled = true;
+            }
+        });
     </script>
 </body>
 </html>
